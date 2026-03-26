@@ -25,9 +25,54 @@ A [Model Context Protocol (MCP)](https://modelcontextprotocol.io) server that pr
   - 100% coverage of core functionality
   - Mocked email servers for reproducible testing
 
+## Install with Claude Desktop (Recommended)
+
+The easiest way to use this server is via the MCPB bundle — a single-file install
+for [Claude Desktop](https://claude.ai/download).
+
+### 1. Download
+
+Download `email_mcp.mcpb` from the [latest release](../../releases/latest).
+
+### 2. Install
+
+Double-click `email_mcp.mcpb`. Claude Desktop will open an installation dialog.
+
+### 3. Configure
+
+Fill in your mail server credentials when prompted. All values are stored in the
+OS keychain (macOS Keychain / Linux Secret Service):
+
+| Field | Description | Example |
+|-------|-------------|---------|
+| **IMAP Host** | IMAP server hostname | `imap.gmail.com` |
+| **IMAP Port** | IMAP server port | `993` (SSL) · `143` (STARTTLS) |
+| **IMAP Username** | Your email address | `you@example.com` |
+| **IMAP Password** | Password or app-specific password | `xxxx xxxx xxxx xxxx` |
+| **IMAP SSL** | Use SSL/TLS for IMAP | `true` (port 993) · `false` (port 143) |
+| **SMTP Host** | SMTP server hostname | `smtp.gmail.com` |
+| **SMTP Port** | SMTP server port | `587` (STARTTLS) · `465` (SSL) |
+| **SMTP Username** | Your email address | `you@example.com` |
+| **SMTP Password** | Password or app-specific password | `xxxx xxxx xxxx xxxx` |
+| **SMTP STARTTLS** | STARTTLS mode | `true` (port 587) · `false` · `none` (auto) |
+
+> **Gmail users:** You must use an [App Password](https://support.google.com/accounts/answer/185833),
+> not your regular Google account password. Enable IMAP under Gmail Settings →
+> Forwarding and POP/IMAP.
+
+### 4. Use
+
+Once installed, Claude can access your email. Try:
+
+> "List my unread emails from this week"
+> "Search for emails from alice@example.com about the project"
+> "Send an email to bob@example.com with subject 'Hello' and body 'Hi Bob!'"
+
+---
+
 ## Requirements
 
-- Python 3.13.5+ (tested with 3.13.5)
+- Python 3.10+ (3.13 recommended)
 - IMAP and SMTP server access
 - API key for MCP authentication
 
@@ -215,7 +260,7 @@ Edit `.env`:
 
 ```bash
 MCP_HOST=0.0.0.0  # Allow remote connections
-MCP_BASE_URL=http://192.168.0.1:8420  # Your server IP
+MCP_BASE_URL=http://<your-server-ip>:8420  # Your server IP
 ```
 
 1. **Install systemd service:**
@@ -252,13 +297,14 @@ Add to your MCP client configuration:
 }
 ```
 
-For remote server, use `http://192.168.0.1:8420/mcp` (replace with your server IP).
+For remote server, use `http://<your-server-ip>:8420/mcp` (replace with your server IP).
 
 ## Architecture
 
 ```
 email_mcp/
-├── main.py                 # FastAPI application entry point
+├── main.py                 # FastAPI application entry point (HTTP/SSE mode)
+├── mcp_server.py           # Stdio MCP entry point (MCPB / Claude Desktop mode)
 ├── config.py               # Pydantic settings (env vars)
 ├── auth.py                 # API key authentication middleware
 ├── imap/
