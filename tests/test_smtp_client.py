@@ -1,7 +1,7 @@
 """Tests for SMTP client."""
 
 import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 
 @pytest.fixture
@@ -50,11 +50,67 @@ async def test_smtp_connection_with_starttls(mock_settings):
 
         await send_message(msg)
 
-        # Verify STARTTLS was called
-        mock_smtp.connect.assert_called_once()
-        mock_smtp.starttls.assert_called_once()
+        # Verify STARTTLS mode is passed to connect
+        mock_smtp.connect.assert_called_once_with(start_tls=True)
+        mock_smtp.starttls.assert_not_called()
         mock_smtp.login.assert_called_once()
         mock_smtp.send_message.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_smtp_connection_with_starttls_auto_mode(mock_settings, monkeypatch):
+    """Test that SMTP connection uses start_tls=None in auto mode."""
+    import smtp.client as smtp_client
+
+    monkeypatch.setattr(smtp_client.settings, "SMTP_STARTTLS", "none")
+
+    mock_smtp = AsyncMock()
+    mock_smtp.connect = AsyncMock()
+    mock_smtp.starttls = AsyncMock()
+    mock_smtp.login = AsyncMock()
+    mock_smtp.send_message = AsyncMock()
+    mock_smtp.quit = AsyncMock()
+
+    with patch("smtp.client.SMTP", return_value=mock_smtp):
+        from email.message import EmailMessage
+        msg = EmailMessage()
+        msg["From"] = "test@test.com"
+        msg["To"] = "user@test.com"
+        msg["Subject"] = "Test"
+        msg.set_content("Body")
+
+        await smtp_client.send_message(msg)
+
+        mock_smtp.connect.assert_called_once_with(start_tls=None)
+        mock_smtp.starttls.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_smtp_connection_with_starttls_disabled(mock_settings, monkeypatch):
+    """Test that SMTP connection uses start_tls=False when disabled."""
+    import smtp.client as smtp_client
+
+    monkeypatch.setattr(smtp_client.settings, "SMTP_STARTTLS", "false")
+
+    mock_smtp = AsyncMock()
+    mock_smtp.connect = AsyncMock()
+    mock_smtp.starttls = AsyncMock()
+    mock_smtp.login = AsyncMock()
+    mock_smtp.send_message = AsyncMock()
+    mock_smtp.quit = AsyncMock()
+
+    with patch("smtp.client.SMTP", return_value=mock_smtp):
+        from email.message import EmailMessage
+        msg = EmailMessage()
+        msg["From"] = "test@test.com"
+        msg["To"] = "user@test.com"
+        msg["Subject"] = "Test"
+        msg.set_content("Body")
+
+        await smtp_client.send_message(msg)
+
+        mock_smtp.connect.assert_called_once_with(start_tls=False)
+        mock_smtp.starttls.assert_not_called()
 
 
 @pytest.mark.asyncio

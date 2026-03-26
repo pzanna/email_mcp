@@ -42,7 +42,7 @@ def test_config_loads_all_required_env_vars(monkeypatch):
     assert settings.SMTP_PORT == 587
     assert settings.SMTP_USER == "test@example.com"
     assert settings.SMTP_PASSWORD == "secret456"
-    assert settings.SMTP_STARTTLS is True
+    assert settings.SMTP_STARTTLS == "true"
 
     # Verify MCP settings
     assert settings.MCP_API_KEY == "test-api-key"
@@ -135,6 +135,57 @@ def test_config_invalid_boolean_raises_error(monkeypatch):
     monkeypatch.setenv("SMTP_USER", "test@example.com")
     monkeypatch.setenv("SMTP_PASSWORD", "secret456")
     monkeypatch.setenv("SMTP_STARTTLS", "true")
+
+    monkeypatch.setenv("MCP_API_KEY", "test-api-key")
+    monkeypatch.setenv("MCP_HOST", "127.0.0.1")
+    monkeypatch.setenv("MCP_PORT", "8420")
+
+    with pytest.raises(ValidationError):
+        import importlib
+        import config
+        importlib.reload(config)
+
+
+def test_config_smtp_starttls_normalizes_case_and_whitespace(monkeypatch):
+    """Test that SMTP_STARTTLS is normalized to lowercase accepted values."""
+    monkeypatch.setenv("IMAP_HOST", "imap.example.com")
+    monkeypatch.setenv("IMAP_PORT", "993")
+    monkeypatch.setenv("IMAP_USER", "test@example.com")
+    monkeypatch.setenv("IMAP_PASSWORD", "secret123")
+    monkeypatch.setenv("IMAP_SSL", "true")
+
+    monkeypatch.setenv("SMTP_HOST", "smtp.example.com")
+    monkeypatch.setenv("SMTP_PORT", "587")
+    monkeypatch.setenv("SMTP_USER", "test@example.com")
+    monkeypatch.setenv("SMTP_PASSWORD", "secret456")
+    monkeypatch.setenv("SMTP_STARTTLS", " NONE ")
+
+    monkeypatch.setenv("MCP_API_KEY", "test-api-key")
+    monkeypatch.setenv("MCP_HOST", "127.0.0.1")
+    monkeypatch.setenv("MCP_PORT", "8420")
+
+    import importlib
+    import config
+    importlib.reload(config)
+
+    from config import settings
+
+    assert settings.SMTP_STARTTLS == "none"
+
+
+def test_config_invalid_smtp_starttls_raises_error(monkeypatch):
+    """Test that SMTP_STARTTLS rejects unsupported string values."""
+    monkeypatch.setenv("IMAP_HOST", "imap.example.com")
+    monkeypatch.setenv("IMAP_PORT", "993")
+    monkeypatch.setenv("IMAP_USER", "test@example.com")
+    monkeypatch.setenv("IMAP_PASSWORD", "secret123")
+    monkeypatch.setenv("IMAP_SSL", "true")
+
+    monkeypatch.setenv("SMTP_HOST", "smtp.example.com")
+    monkeypatch.setenv("SMTP_PORT", "587")
+    monkeypatch.setenv("SMTP_USER", "test@example.com")
+    monkeypatch.setenv("SMTP_PASSWORD", "secret456")
+    monkeypatch.setenv("SMTP_STARTTLS", "maybe")
 
     monkeypatch.setenv("MCP_API_KEY", "test-api-key")
     monkeypatch.setenv("MCP_HOST", "127.0.0.1")

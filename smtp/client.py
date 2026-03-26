@@ -21,6 +21,17 @@ class SMTPSendError(Exception):
     pass
 
 
+def _smtp_starttls_connect_arg(starttls_setting: str) -> bool | None:
+    """Map config value to aiosmtplib connect(start_tls=...) argument."""
+    if starttls_setting == "none":
+        return None
+    if starttls_setting == "true":
+        return True
+    if starttls_setting == "false":
+        return False
+    raise ValueError('SMTP_STARTTLS must be one of: "none", "true", "false"')
+
+
 async def send_message(msg: EmailMessage) -> str:
     """
     Send an email message via SMTP.
@@ -44,12 +55,10 @@ async def send_message(msg: EmailMessage) -> str:
             timeout=30,
         )
 
-        # Connect
-        await smtp.connect()
-
-        # Use STARTTLS if configured
-        if settings.SMTP_STARTTLS:
-            await smtp.starttls()
+        # Connect, letting aiosmtplib handle STARTTLS mode during connect.
+        await smtp.connect(
+            start_tls=_smtp_starttls_connect_arg(settings.SMTP_STARTTLS)
+        )
 
         # Authenticate
         try:

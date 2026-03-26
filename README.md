@@ -36,7 +36,7 @@ A [Model Context Protocol (MCP)](https://modelcontextprotocol.io) server that pr
 ### 1. Clone and Set Up
 
 ```bash
-git clone <your-repo-url>
+git clone https://github.com/pzanna/email_mcp.git
 cd email_mcp
 python3 -m venv .venv
 source .venv/bin/activate  # On Windows: .venv\Scripts\activate
@@ -51,6 +51,7 @@ cp .env.example .env
 ```
 
 Required environment variables:
+
 ```bash
 # IMAP Configuration
 IMAP_HOST=imap.gmail.com
@@ -64,6 +65,7 @@ SMTP_HOST=smtp.gmail.com
 SMTP_PORT=587
 SMTP_USER=you@gmail.com
 SMTP_PASSWORD=your-app-password
+# SMTP_STARTTLS mode: "none" (auto), "true" (force), "false" (disable)
 SMTP_STARTTLS=true
 
 # MCP Server Configuration
@@ -82,12 +84,14 @@ IMAP_POOL_SIZE=3
 ### 3. Run the Server
 
 **Local development (Mac/Linux):**
+
 ```bash
 source .venv/bin/activate
 uvicorn main:app --host 127.0.0.1 --port 8420
 ```
 
 **Access the server:**
+
 - MCP endpoint: `http://localhost:8420/mcp`
 - Health check: `http://localhost:8420/health`
 - API docs: `http://localhost:8420/docs`
@@ -191,11 +195,13 @@ curl -X POST http://localhost:8420/mcp/call \
 ### Ubuntu Server with systemd
 
 1. **Copy files to server:**
+
 ```bash
 scp -r email_mcp user@server:/home/user/
 ```
 
-2. **Set up Python environment:**
+1. **Set up Python environment:**
+
 ```bash
 ssh user@server
 cd ~/email_mcp
@@ -204,14 +210,16 @@ source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-3. **Configure for remote access:**
+1. **Configure for remote access:**
 Edit `.env`:
+
 ```bash
 MCP_HOST=0.0.0.0  # Allow remote connections
 MCP_BASE_URL=http://192.168.2.3:8420  # Your server IP
 ```
 
-4. **Install systemd service:**
+1. **Install systemd service:**
+
 ```bash
 # Edit email-mcp.service to match your paths
 sudo cp email-mcp.service /etc/systemd/system/
@@ -220,7 +228,8 @@ sudo systemctl enable email-mcp
 sudo systemctl start email-mcp
 ```
 
-5. **Check status:**
+1. **Check status:**
+
 ```bash
 sudo systemctl status email-mcp
 sudo journalctl -u email-mcp -f  # View logs
@@ -298,6 +307,8 @@ openssl s_client -starttls smtp -connect smtp.gmail.com:587
 - **`FOLDER_NOT_FOUND`**: Folder names are case-sensitive (use `list_folders` to verify)
 - **`MESSAGE_NOT_FOUND`**: UID may be invalid or message was deleted
 
+**`SMTPException - Connection already using TLS`**: Set `SMTP_STARTTLS=none` in `.env` for auto mode. Valid values are `none`, `true`, and `false`.
+
 ## Development
 
 ### Project Structure
@@ -332,6 +343,7 @@ MIT
 ## Contributing
 
 Contributions are welcome! Please:
+
 1. Write tests for all new features
 2. Follow existing code style (black, isort, mypy)
 3. Update this README for significant changes
