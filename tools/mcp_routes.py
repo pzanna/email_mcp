@@ -35,46 +35,6 @@ class MCPToolCallResponse(BaseModel):
     isError: Optional[bool] = None
 
 
-@router.get("")
-async def get_server_info():
-    """MCP server info endpoint - returns server metadata and capabilities."""
-    return {
-        "name": "email-mcp",
-        "version": "0.1.0",
-        "title": "Email MCP Server",
-        "description": "MCP server for email access via IMAP and SMTP",
-        "protocol": "MCP",
-        "protocolVersion": "2025-03-26",
-        "capabilities": {
-            "tools": [
-                "list_folders",
-                "search_emails",
-                "read_email",
-                "mark_email",
-                "move_email",
-                "send_email",
-                "reply_email"
-            ],
-            "logging": {},
-            "features": [
-                "IMAP email folder listing",
-                "Email search with multiple criteria",
-                "Full email content retrieval",
-                "Email flag management (read/unread, flagged)",
-                "Email folder operations (move)",
-                "SMTP email sending",
-                "Email reply with thread preservation"
-            ]
-        },
-        "endpoints": {
-            "main": "POST /mcp/call (MCP tool calls)",
-            "info": "GET /mcp",
-            "health": "GET /health",
-            "tools": "GET /mcp/tools"
-        }
-    }
-
-
 @router.get("/tools")
 async def get_tools():
     """List available MCP tools."""
