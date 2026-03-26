@@ -2,7 +2,7 @@
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
-from typing import Any, Optional
+from typing import Any, Optional, Union
 import json
 
 from auth import verify_api_key
@@ -12,9 +12,11 @@ router = APIRouter(prefix="/mcp", dependencies=[Depends(verify_api_key)])
 
 
 class MCPToolCallRequest(BaseModel):
-    """MCP tools/call request format."""
+    """JSON-RPC 2.0 request format used by MCP."""
+    jsonrpc: str = "2.0"
+    id: Optional[Union[str, int]] = None
     method: str
-    params: dict[str, Any]
+    params: Optional[dict[str, Any]] = None
 
 
 class MCPContentItem(BaseModel):
@@ -62,8 +64,9 @@ async def call_tool(request: MCPToolCallRequest) -> MCPToolCallResponse:
     if request.method != "tools/call":
         raise HTTPException(status_code=400, detail=f"Unsupported method: {request.method}")
 
-    tool_name = request.params.get("name")
-    arguments = request.params.get("arguments", {})
+    params = request.params or {}
+    tool_name = params.get("name")
+    arguments = params.get("arguments", {})
 
     if not tool_name:
         raise HTTPException(status_code=400, detail="Missing tool name")

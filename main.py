@@ -4,12 +4,13 @@ Email MCP Server - Main Application Entry Point
 FastAPI application providing MCP-compliant email access via IMAP and SMTP.
 """
 
-from fastapi import FastAPI, Depends, Request, HTTPException, Header
+from fastapi import FastAPI, Depends, HTTPException
+from fastapi.responses import Response
 from fastapi.middleware.cors import CORSMiddleware
 from config import settings
 from tools.mcp_routes import router as mcp_router, MCPToolCallRequest, MCPToolCallResponse
 from auth import verify_api_key
-from typing import Union, Any
+from typing import Union, Any, Optional
 from pydantic import BaseModel
 
 app = FastAPI(
@@ -28,15 +29,18 @@ app.add_middleware(
 )
 
 
-class MCPInitializeResponse(BaseModel):
-    """MCP initialize response format."""
-    protocolVersion: str
-    capabilities: dict[str, Any]
-    serverInfo: dict[str, str]
+class JSONRPCResponse(BaseModel):
+    """JSON-RPC 2.0 success response envelope."""
+    jsonrpc: str = "2.0"
+    id: Optional[Union[str, int]] = None
+    result: Any = None
 
 
-# Union type to handle different MCP response types
-MCPResponse = Union[MCPInitializeResponse, MCPToolCallResponse]
+class JSONRPCError(BaseModel):
+    """JSON-RPC 2.0 error response envelope."""
+    jsonrpc: str = "2.0"
+    id: Optional[Union[str, int]] = None
+    error: dict[str, Any]
 
 
 @app.get("/mcp")
@@ -80,48 +84,62 @@ async def mcp_server_info():
 
 
 @app.post("/mcp")
-async def mcp_tool_call(request: MCPToolCallRequest, api_key: str = Depends(verify_api_key)) -> MCPResponse:
-    """MCP endpoint - handles JSON-RPC 2.0 initialize and tool calls with authentication."""
-    # Debug logging
+async def mcp_tool_call(request: MCPToolCallRequest, api_key: str = Depends(verify_api_key)):
+    """MCP endpoint - handles the full JSON-RPC 2.0 MCP session lifecycle."""
     import logging
     logger = logging.getLogger(__name__)
-    logger.info(f"Received MCP request: method='{request.method}', params={request.params}")
+    logger.info(f"Received MCP request: method='{request.method}', id={request.id}")
+
+    req_id = request.id
 
     if request.method == "initialize":
-        # Handle MCP initialization handshake
-        logger.info("Handling MCP initialize request")
-        return MCPInitializeResponse(
-            protocolVersion="2025-03-26",
-            capabilities={
-                "tools": {
-                    "listChanged": False
+        return JSONRPCResponse(
+            id=req_id,
+            result={
+                "protocolVersion": "2025-03-26",
+                "capabilities": {
+                    "tools": {"listChanged": False},
+                    "logging": {},
                 },
-                "logging": {},
+                "serverInfo": {
+                    "name": "email-mcp",
+                    "version": "0.1.0",
+                },
             },
-            serverInfo={
-                "name": "email-mcp",
-                "version": "0.1.0"
-            }
         )
 
+    elif request.method == "notifications/initialized":
+        # Client notification after handshake — no response body per JSON-RPC 2.0
+        return Response(status_code=202)
+
+    elif request.method == "ping":
+        return JSONRPCResponse(id=req_id, result={})
+
+    elif request.method == "tools/list":
+        from tools.definitions import TOOL_SCHEMAS
+        return JSONRPCResponse(id=req_id, result={"tools": TOOL_SCHEMAS})
+
     elif request.method == "tools/call":
-        # Handle tool execution
-        tool_name = request.params.get("name")
-        arguments = request.params.get("arguments", {})
+        params = request.params or {}
+        tool_name = params.get("name")
+        arguments = params.get("arguments", {})
 
         if not tool_name:
-            logger.error(f"Missing tool name in params: {request.params}")
-            raise HTTPException(status_code=400, detail="Missing tool name")
+            return JSONRPCError(
+                id=req_id,
+                error={"code": -32602, "message": "Invalid params", "data": "Missing tool name"},
+            )
 
-        logger.info(f"Executing tool: {tool_name} with args: {arguments}")
-
-        # Import here to avoid circular imports
         from tools.handlers import execute_tool
-        return await execute_tool(tool_name, arguments)
+        tool_result = await execute_tool(tool_name, arguments)
+        return JSONRPCResponse(id=req_id, result=tool_result.model_dump())
 
     else:
-        logger.error(f"Unsupported method: {request.method}")
-        raise HTTPException(status_code=400, detail=f"Unsupported method: {request.method}")
+        logger.warning(f"Unknown MCP method: {request.method}")
+        return JSONRPCError(
+            id=req_id,
+            error={"code": -32601, "message": f"Method not found: {request.method}"},
+        )
 
 
 @app.get("/health")
