@@ -192,7 +192,7 @@ Content-Type: text/plain; charset=utf-8
 This is the email body.
 """
 
-    mock_client.fetch = AsyncMock(return_value=(
+    mock_client.uid = AsyncMock(return_value=(
         "OK",
         [b'1 (UID 123 RFC822 {300}', bytearray(email_content), b')', b'A001 OK FETCH completed']
     ))
@@ -229,7 +229,7 @@ Content-Type: text/plain
 Body text.
 """
 
-    mock_client.fetch = AsyncMock(return_value=(
+    mock_client.uid = AsyncMock(return_value=(
         "OK",
         [b'1 (RFC822 {100}', bytearray(email_content), b')', b'A001 OK FETCH completed']
     ))
@@ -282,7 +282,7 @@ Content-Transfer-Encoding: base64
 --boundary123--
 """
 
-    mock_client.fetch = AsyncMock(return_value=(
+    mock_client.uid = AsyncMock(return_value=(
         "OK",
         [b'1 (RFC822 {500}', bytearray(email_content), b')', b'A001 OK FETCH completed']
     ))
@@ -309,7 +309,7 @@ async def test_read_email_handles_message_not_found(mock_settings):
 
     mock_client = AsyncMock()
     mock_client.select = AsyncMock(return_value=("OK", [b"1"]))
-    mock_client.fetch = AsyncMock(return_value=("NO", [b"Message not found"]))
+    mock_client.uid = AsyncMock(return_value=("NO", [b"Message not found"]))
 
     with patch("imap.read.imap_pool") as mock_pool:
         mock_pool.acquire_connection.return_value.__aenter__.return_value = mock_client
@@ -345,7 +345,7 @@ Content-Type: text/html
 --alt123--
 """
 
-    mock_client.fetch = AsyncMock(return_value=(
+    mock_client.uid = AsyncMock(return_value=(
         "OK",
         [b'1 (RFC822 {400}', bytearray(email_content), b')', b'A001 OK FETCH completed']
     ))
@@ -378,7 +378,7 @@ Content-Type: text/plain
 Just plain text.
 """
 
-    mock_client.fetch = AsyncMock(return_value=(
+    mock_client.uid = AsyncMock(return_value=(
         "OK",
         [b'1 (RFC822 {200}', bytearray(email_content), b')', b'A001 OK FETCH completed']
     ))

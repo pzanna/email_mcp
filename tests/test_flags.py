@@ -28,6 +28,19 @@ def mock_settings(monkeypatch):
     importlib.reload(config)
 
 
+def _uid_ok(*args, **kwargs):
+    """Default UID command handler — returns OK for any command."""
+    return ("OK", [b"1 (FLAGS (\\Seen))"])
+
+
+def _uid_no_move_capability(*args, **kwargs):
+    """Simulate UID MOVE raising 'server has not MOVE capability'."""
+    cmd = args[0] if args else ""
+    if cmd == "MOVE":
+        raise Exception("server has not MOVE capability")
+    return ("OK", [b"1 (FLAGS (\\Deleted))"])
+
+
 # Tests for mark_email
 @pytest.mark.asyncio
 async def test_mark_email_set_read_true(mock_settings):
@@ -36,7 +49,7 @@ async def test_mark_email_set_read_true(mock_settings):
 
     mock_client = AsyncMock()
     mock_client.select = AsyncMock(return_value=("OK", [b"1"]))
-    mock_client.store = AsyncMock(return_value=("OK", [b"1 (FLAGS (\\Seen))"]))
+    mock_client.uid = AsyncMock(return_value=("OK", [b"1 (FLAGS (\\Seen))"]))
 
     with patch("imap.flags.imap_pool") as mock_pool:
         mock_pool.acquire_connection.return_value.__aenter__.return_value = mock_client
@@ -44,11 +57,12 @@ async def test_mark_email_set_read_true(mock_settings):
         result = await mark_email(MarkEmailInput(uid="123", read=True))
 
         assert result.success is True
-        # Verify store was called with +FLAGS \Seen
-        mock_client.store.assert_called_once()
-        call_args = mock_client.store.call_args[0]
+        # Verify uid() was called with STORE, the UID, and +FLAGS
+        mock_client.uid.assert_called_once()
+        call_args = mock_client.uid.call_args[0]
+        assert call_args[0] == "STORE"
         assert "123" in call_args
-        assert "+FLAGS" in call_args or "+FLAGS.SILENT" in call_args
+        assert "+FLAGS" in call_args
 
 
 @pytest.mark.asyncio
@@ -58,7 +72,7 @@ async def test_mark_email_set_read_false(mock_settings):
 
     mock_client = AsyncMock()
     mock_client.select = AsyncMock(return_value=("OK", [b"1"]))
-    mock_client.store = AsyncMock(return_value=("OK", [b"1 (FLAGS ())"]))
+    mock_client.uid = AsyncMock(return_value=("OK", [b"1 (FLAGS ())"]))
 
     with patch("imap.flags.imap_pool") as mock_pool:
         mock_pool.acquire_connection.return_value.__aenter__.return_value = mock_client
@@ -66,10 +80,10 @@ async def test_mark_email_set_read_false(mock_settings):
         result = await mark_email(MarkEmailInput(uid="123", read=False))
 
         assert result.success is True
-        # Verify store was called with -FLAGS \Seen
-        mock_client.store.assert_called_once()
-        call_args = mock_client.store.call_args[0]
-        assert "-FLAGS" in call_args or "-FLAGS.SILENT" in call_args
+        mock_client.uid.assert_called_once()
+        call_args = mock_client.uid.call_args[0]
+        assert call_args[0] == "STORE"
+        assert "-FLAGS" in call_args
 
 
 @pytest.mark.asyncio
@@ -79,7 +93,7 @@ async def test_mark_email_set_flagged_true(mock_settings):
 
     mock_client = AsyncMock()
     mock_client.select = AsyncMock(return_value=("OK", [b"1"]))
-    mock_client.store = AsyncMock(return_value=("OK", [b"1 (FLAGS (\\Flagged))"]))
+    mock_client.uid = AsyncMock(return_value=("OK", [b"1 (FLAGS (\\Flagged))"]))
 
     with patch("imap.flags.imap_pool") as mock_pool:
         mock_pool.acquire_connection.return_value.__aenter__.return_value = mock_client
@@ -87,7 +101,10 @@ async def test_mark_email_set_flagged_true(mock_settings):
         result = await mark_email(MarkEmailInput(uid="123", flagged=True))
 
         assert result.success is True
-        mock_client.store.assert_called_once()
+        mock_client.uid.assert_called_once()
+        call_args = mock_client.uid.call_args[0]
+        assert call_args[0] == "STORE"
+        assert "+FLAGS" in call_args
 
 
 @pytest.mark.asyncio
@@ -97,7 +114,7 @@ async def test_mark_email_set_flagged_false(mock_settings):
 
     mock_client = AsyncMock()
     mock_client.select = AsyncMock(return_value=("OK", [b"1"]))
-    mock_client.store = AsyncMock(return_value=("OK", [b"1 (FLAGS ())"]))
+    mock_client.uid = AsyncMock(return_value=("OK", [b"1 (FLAGS ())"]))
 
     with patch("imap.flags.imap_pool") as mock_pool:
         mock_pool.acquire_connection.return_value.__aenter__.return_value = mock_client
@@ -105,6 +122,10 @@ async def test_mark_email_set_flagged_false(mock_settings):
         result = await mark_email(MarkEmailInput(uid="123", flagged=False))
 
         assert result.success is True
+        mock_client.uid.assert_called_once()
+        call_args = mock_client.uid.call_args[0]
+        assert call_args[0] == "STORE"
+        assert "-FLAGS" in call_args
 
 
 @pytest.mark.asyncio
@@ -114,7 +135,7 @@ async def test_mark_email_set_both_flags(mock_settings):
 
     mock_client = AsyncMock()
     mock_client.select = AsyncMock(return_value=("OK", [b"1"]))
-    mock_client.store = AsyncMock(return_value=("OK", [b"1 (FLAGS (\\Seen \\Flagged))"]))
+    mock_client.uid = AsyncMock(return_value=("OK", [b"1 (FLAGS (\\Seen \\Flagged))"]))
 
     with patch("imap.flags.imap_pool") as mock_pool:
         mock_pool.acquire_connection.return_value.__aenter__.return_value = mock_client
@@ -122,8 +143,8 @@ async def test_mark_email_set_both_flags(mock_settings):
         result = await mark_email(MarkEmailInput(uid="123", read=True, flagged=True))
 
         assert result.success is True
-        # Should have been called twice (once for each flag)
-        assert mock_client.store.call_count >= 1
+        # Should have been called twice (once for read, once for flagged)
+        assert mock_client.uid.call_count == 2
 
 
 @pytest.mark.asyncio
@@ -133,7 +154,7 @@ async def test_mark_email_returns_success_true(mock_settings):
 
     mock_client = AsyncMock()
     mock_client.select = AsyncMock(return_value=("OK", [b"1"]))
-    mock_client.store = AsyncMock(return_value=("OK", [b"1 (FLAGS (\\Seen))"]))
+    mock_client.uid = AsyncMock(return_value=("OK", [b"1 (FLAGS (\\Seen))"]))
 
     with patch("imap.flags.imap_pool") as mock_pool:
         mock_pool.acquire_connection.return_value.__aenter__.return_value = mock_client
@@ -151,12 +172,11 @@ async def test_mark_email_handles_message_not_found(mock_settings):
 
     mock_client = AsyncMock()
     mock_client.select = AsyncMock(return_value=("OK", [b"1"]))
-    mock_client.store = AsyncMock(return_value=("NO", [b"Message not found"]))
+    mock_client.uid = AsyncMock(return_value=("NO", [b"Message not found"]))
 
     with patch("imap.flags.imap_pool") as mock_pool:
         mock_pool.acquire_connection.return_value.__aenter__.return_value = mock_client
 
-        # Should raise an error or return success=False
         from imap.flags import IMAPMessageNotFoundError
         with pytest.raises(IMAPMessageNotFoundError):
             await mark_email(MarkEmailInput(uid="999", read=True))
@@ -164,41 +184,25 @@ async def test_mark_email_handles_message_not_found(mock_settings):
 
 # Tests for move_email
 def _no_move_capability(*args, **kwargs):
-    """Simulate a server that doesn't support MOVE."""
+    """Simulate UID MOVE raising 'server has not MOVE capability'."""
     raise Exception("server has not MOVE capability")
 
 
 @pytest.mark.asyncio
 async def test_move_email_uses_move_when_available(mock_settings):
-    """Test that move_email uses RFC 6851 MOVE when the server supports it."""
+    """Test that move_email uses RFC 6851 UID MOVE when the server supports it."""
     from imap.flags import move_email, MoveEmailInput
+
+    move_responses = {
+        "MOVE": ("OK", [b"OK [COPYUID 1 123 456]"]),
+    }
+
+    async def uid_router(cmd, *args, **kwargs):
+        return move_responses.get(cmd, ("OK", [b"OK"]))
 
     mock_client = AsyncMock()
     mock_client.select = AsyncMock(return_value=("OK", [b"1"]))
-    mock_client.move = AsyncMock(return_value=("OK", [b"OK [COPYUID 1 123 456]"]))
-
-    with patch("imap.flags.imap_pool") as mock_pool:
-        mock_pool.acquire_connection.return_value.__aenter__.return_value = mock_client
-
-        result = await move_email(MoveEmailInput(uid="123", to_folder="Archive"))
-
-        assert result.success is True
-        mock_client.move.assert_called_once()
-        # COPY+DELETE path must NOT have been taken
-        mock_client.copy.assert_not_called()
-        mock_client.expunge.assert_not_called()
-
-
-@pytest.mark.asyncio
-async def test_move_email_moves_message(mock_settings):
-    """Test moving message via COPY+DELETE fallback when MOVE not supported."""
-    from imap.flags import move_email, MoveEmailInput
-
-    mock_client = AsyncMock()
-    mock_client.select = AsyncMock(return_value=("OK", [b"1"]))
-    mock_client.move = AsyncMock(side_effect=_no_move_capability)
-    mock_client.copy = AsyncMock(return_value=("OK", [b"OK [COPYUID 1 123 456]"]))
-    mock_client.store = AsyncMock(return_value=("OK", [b"1 (FLAGS (\\Deleted))"]))
+    mock_client.uid = AsyncMock(side_effect=uid_router)
     mock_client.expunge = AsyncMock(return_value=("OK", []))
 
     with patch("imap.flags.imap_pool") as mock_pool:
@@ -207,22 +211,53 @@ async def test_move_email_moves_message(mock_settings):
         result = await move_email(MoveEmailInput(uid="123", to_folder="Archive"))
 
         assert result.success is True
-        # Verify copy was called
-        mock_client.copy.assert_called_once()
-        # Verify store was called to mark as deleted
-        mock_client.store.assert_called_once()
-        # Verify expunge was called
+        # Only MOVE was called — no COPY or STORE
+        commands_called = [c[0][0] for c in mock_client.uid.call_args_list]
+        assert "MOVE" in commands_called
+        assert "COPY" not in commands_called
+        assert "STORE" not in commands_called
+        mock_client.expunge.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_move_email_moves_message(mock_settings):
+    """Test moving message via UID COPY+DELETE fallback when MOVE not supported."""
+    from imap.flags import move_email, MoveEmailInput
+
+    async def uid_router(cmd, *args, **kwargs):
+        if cmd == "MOVE":
+            raise Exception("server has not MOVE capability")
+        if cmd == "COPY":
+            return ("OK", [b"OK [COPYUID 1 123 456]"])
+        if cmd == "STORE":
+            return ("OK", [b"1 (FLAGS (\\Deleted))"])
+        return ("OK", [b"OK"])
+
+    mock_client = AsyncMock()
+    mock_client.select = AsyncMock(return_value=("OK", [b"1"]))
+    mock_client.uid = AsyncMock(side_effect=uid_router)
+    mock_client.expunge = AsyncMock(return_value=("OK", []))
+
+    with patch("imap.flags.imap_pool") as mock_pool:
+        mock_pool.acquire_connection.return_value.__aenter__.return_value = mock_client
+
+        result = await move_email(MoveEmailInput(uid="123", to_folder="Archive"))
+
+        assert result.success is True
+        commands_called = [c[0][0] for c in mock_client.uid.call_args_list]
+        assert "COPY" in commands_called
+        assert "STORE" in commands_called
         mock_client.expunge.assert_called_once()
 
 
 @pytest.mark.asyncio
 async def test_move_email_returns_new_uid(mock_settings):
-    """Test that move_email returns new_uid if available."""
+    """Test that move_email returns new_uid from MOVEUID response."""
     from imap.flags import move_email, MoveEmailInput
 
     mock_client = AsyncMock()
     mock_client.select = AsyncMock(return_value=("OK", [b"1"]))
-    mock_client.move = AsyncMock(return_value=("OK", [b"OK [MOVEUID 1 123 456]"]))
+    mock_client.uid = AsyncMock(return_value=("OK", [b"OK [MOVEUID 1 123 456]"]))
 
     with patch("imap.flags.imap_pool") as mock_pool:
         mock_pool.acquire_connection.return_value.__aenter__.return_value = mock_client
@@ -239,10 +274,14 @@ async def test_move_email_handles_folder_not_found(mock_settings):
     """Test that move_email handles FOLDER_NOT_FOUND for destination."""
     from imap.flags import move_email, MoveEmailInput, IMAPFolderNotFoundError
 
+    async def uid_router(cmd, *args, **kwargs):
+        if cmd == "MOVE":
+            raise Exception("server has not MOVE capability")
+        return ("NO", [b"[TRYCREATE] Folder not found"])
+
     mock_client = AsyncMock()
     mock_client.select = AsyncMock(return_value=("OK", [b"1"]))
-    mock_client.move = AsyncMock(side_effect=_no_move_capability)
-    mock_client.copy = AsyncMock(return_value=("NO", [b"[TRYCREATE] Folder not found"]))
+    mock_client.uid = AsyncMock(side_effect=uid_router)
 
     with patch("imap.flags.imap_pool") as mock_pool:
         mock_pool.acquire_connection.return_value.__aenter__.return_value = mock_client
@@ -256,10 +295,14 @@ async def test_move_email_handles_message_not_found(mock_settings):
     """Test that move_email handles MESSAGE_NOT_FOUND if UID doesn't exist."""
     from imap.flags import move_email, MoveEmailInput, IMAPMessageNotFoundError, IMAPFolderNotFoundError
 
+    async def uid_router(cmd, *args, **kwargs):
+        if cmd == "MOVE":
+            raise Exception("server has not MOVE capability")
+        return ("NO", [b"Message not found"])
+
     mock_client = AsyncMock()
     mock_client.select = AsyncMock(return_value=("OK", [b"1"]))
-    mock_client.move = AsyncMock(side_effect=_no_move_capability)
-    mock_client.copy = AsyncMock(return_value=("NO", [b"Message not found"]))
+    mock_client.uid = AsyncMock(side_effect=uid_router)
 
     with patch("imap.flags.imap_pool") as mock_pool:
         mock_pool.acquire_connection.return_value.__aenter__.return_value = mock_client
@@ -273,11 +316,18 @@ async def test_move_email_deletes_source_message(mock_settings):
     """Test that move_email marks source as deleted and expunges (COPY fallback)."""
     from imap.flags import move_email, MoveEmailInput
 
+    async def uid_router(cmd, *args, **kwargs):
+        if cmd == "MOVE":
+            raise Exception("server has not MOVE capability")
+        if cmd == "COPY":
+            return ("OK", [b"OK"])
+        if cmd == "STORE":
+            return ("OK", [b"1 (FLAGS (\\Deleted))"])
+        return ("OK", [b"OK"])
+
     mock_client = AsyncMock()
     mock_client.select = AsyncMock(return_value=("OK", [b"1"]))
-    mock_client.move = AsyncMock(side_effect=_no_move_capability)
-    mock_client.copy = AsyncMock(return_value=("OK", [b"OK"]))
-    mock_client.store = AsyncMock(return_value=("OK", [b"1 (FLAGS (\\Deleted))"]))
+    mock_client.uid = AsyncMock(side_effect=uid_router)
     mock_client.expunge = AsyncMock(return_value=("OK", []))
 
     with patch("imap.flags.imap_pool") as mock_pool:
@@ -286,8 +336,9 @@ async def test_move_email_deletes_source_message(mock_settings):
         await move_email(MoveEmailInput(uid="123", to_folder="Archive"))
 
         # Verify deletion workflow
-        mock_client.store.assert_called_once()
-        store_call = mock_client.store.call_args[0]
-        assert "\\Deleted" in str(store_call)
+        store_calls = [c for c in mock_client.uid.call_args_list if c[0][0] == "STORE"]
+        assert len(store_calls) == 1
+        store_args = store_calls[0][0]
+        assert "\\Deleted" in str(store_args)
 
         mock_client.expunge.assert_called_once()

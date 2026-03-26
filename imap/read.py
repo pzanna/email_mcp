@@ -137,8 +137,8 @@ async def read_email(params: ReadEmailInput) -> ReadEmailResponse:
         if response[0] != "OK":
             raise IMAPMessageNotFoundError(f"FOLDER_NOT_FOUND: {params.folder}")
 
-        # Fetch full message using UID for stable addressing
-        response = await client.fetch(params.uid, "(RFC822)", by_uid=True)
+        # Fetch full message via UID FETCH for stable addressing
+        response = await client.uid('FETCH', params.uid, "(RFC822)")
 
         if response[0] != "OK":
             raise IMAPMessageNotFoundError(f"MESSAGE_NOT_FOUND: UID {params.uid}")

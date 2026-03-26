@@ -116,8 +116,8 @@ async def search_emails(params: SearchEmailsInput) -> SearchEmailsResponse:
         else:
             search_str = ' '.join(criteria)
 
-        # Execute search using UIDs for stable addressing
-        response = await client.search(search_str, by_uid=True)
+        # Execute UID SEARCH for stable addressing
+        response = await client.uid_search(search_str)
 
         if response[0] != "OK":
             logger.error(f"SEARCH failed: {response}")
@@ -138,8 +138,8 @@ async def search_emails(params: SearchEmailsInput) -> SearchEmailsResponse:
         messages = []
         for uid in uids:
             try:
-                # Fetch headers and flags for this message using UID
-                fetch_response = await client.fetch(uid, '(FLAGS RFC822.HEADER)', by_uid=True)
+                # Fetch headers and flags for this message via UID FETCH
+                fetch_response = await client.uid('FETCH', uid, '(FLAGS RFC822.HEADER)')
 
                 if fetch_response[0] != "OK":
                     logger.warning(f"Failed to fetch UID {uid}")

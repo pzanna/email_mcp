@@ -56,11 +56,11 @@ async def mark_email(params: MarkEmailInput) -> MarkEmailResponse:
         # Apply read flag if specified
         if params.read is not None:
             if params.read:
-                # Add \Seen flag
-                response = await client.store(params.uid, "+FLAGS", "(\\Seen)", by_uid=True)
+                # Add \Seen flag via UID STORE
+                response = await client.uid('STORE', params.uid, "+FLAGS", "(\\Seen)")
             else:
-                # Remove \Seen flag
-                response = await client.store(params.uid, "-FLAGS", "(\\Seen)", by_uid=True)
+                # Remove \Seen flag via UID STORE
+                response = await client.uid('STORE', params.uid, "-FLAGS", "(\\Seen)")
 
             if response[0] != "OK":
                 raise IMAPMessageNotFoundError(f"MESSAGE_NOT_FOUND: UID {params.uid}")
@@ -68,11 +68,11 @@ async def mark_email(params: MarkEmailInput) -> MarkEmailResponse:
         # Apply flagged flag if specified
         if params.flagged is not None:
             if params.flagged:
-                # Add \Flagged flag
-                response = await client.store(params.uid, "+FLAGS", "(\\Flagged)", by_uid=True)
+                # Add \Flagged flag via UID STORE
+                response = await client.uid('STORE', params.uid, "+FLAGS", "(\\Flagged)")
             else:
-                # Remove \Flagged flag
-                response = await client.store(params.uid, "-FLAGS", "(\\Flagged)", by_uid=True)
+                # Remove \Flagged flag via UID STORE
+                response = await client.uid('STORE', params.uid, "-FLAGS", "(\\Flagged)")
 
             if response[0] != "OK":
                 raise IMAPMessageNotFoundError(f"MESSAGE_NOT_FOUND: UID {params.uid}")
@@ -98,9 +98,9 @@ async def move_email(params: MoveEmailInput) -> MoveEmailResponse:
     """
     Move a message from one folder to another.
 
-    Attempts RFC 6851 MOVE (atomic, preserves flags) first.  If the server
-    does not advertise the MOVE capability, falls back to COPY + store
-    \\Deleted + EXPUNGE.
+    Attempts RFC 6851 MOVE (atomic, preserves flags) first via UID MOVE.
+    If the server does not advertise the MOVE capability, falls back to
+    UID COPY + UID STORE \\Deleted + EXPUNGE.
 
     Args:
         params: Move email parameters
@@ -120,9 +120,9 @@ async def move_email(params: MoveEmailInput) -> MoveEmailResponse:
 
         new_uid = None
 
-        # Try RFC 6851 MOVE first (atomic, no expunge needed)
+        # Try RFC 6851 UID MOVE first (atomic, no expunge needed)
         try:
-            response = await client.move(params.uid, params.to_folder, by_uid=True)
+            response = await client.uid('MOVE', params.uid, params.to_folder)
 
             if response[0] != "OK":
                 error_msg = ""
@@ -151,8 +151,8 @@ async def move_email(params: MoveEmailInput) -> MoveEmailResponse:
 
             logger.debug(f"Server lacks MOVE capability; falling back to COPY+DELETE for UID {params.uid}")
 
-        # Fallback: COPY then mark deleted + expunge
-        response = await client.copy(params.uid, params.to_folder, by_uid=True)
+        # Fallback: UID COPY then mark deleted + expunge
+        response = await client.uid('COPY', params.uid, params.to_folder)
 
         if response[0] != "OK":
             error_msg = ""
@@ -171,8 +171,8 @@ async def move_email(params: MoveEmailInput) -> MoveEmailResponse:
             if match:
                 new_uid = match.group(1)
 
-        # Mark source message as deleted
-        response = await client.store(params.uid, "+FLAGS", "(\\Deleted)", by_uid=True)
+        # Mark source message as deleted via UID STORE
+        response = await client.uid('STORE', params.uid, "+FLAGS", "(\\Deleted)")
         if response[0] != "OK":
             logger.warning(f"Failed to mark UID {params.uid} as deleted")
 
