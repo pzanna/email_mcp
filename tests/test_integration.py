@@ -91,17 +91,38 @@ async def test_mcp_call_all_tools_return_correct_schema(mock_settings):
 
     client = TestClient(app)
 
-    # Mock IMAP client
+    # Mock IMAP client — all UID-based operations go through uid_search / uid()
     mock_client = AsyncMock()
     mock_client.list = AsyncMock(return_value=("OK", [b'(\\HasNoChildren) "/" "INBOX"']))
     mock_client.select = AsyncMock(return_value=("OK", [b"1"]))
-    mock_client.search = AsyncMock(return_value=("OK", [b"123"]))
-    mock_client.fetch = AsyncMock(return_value=(
+    mock_client.uid_search = AsyncMock(return_value=("OK", [b"123"]))
+
+    # uid() handles FETCH, STORE, COPY, MOVE — route by first positional arg
+    _email_headers = (
+        b'From: test@test.com\r\n'
+        b'To: me@test.com\r\n'
+        b'Subject: Test\r\n'
+        b'Date: Mon, 10 Mar 2024 09:15:00 +0000\r\n'
+        b'Message-ID: <orig@test.com>\r\n'
+        b'\r\n'
+        b'Body'
+    )
+    _fetch_response = (
         "OK",
-        [(b'123 (RFC822 {100}', b'From: test@test.com\r\nSubject: Test\r\n\r\nBody'), b')']
-    ))
-    mock_client.store = AsyncMock(return_value=("OK", [b"OK"]))
-    mock_client.copy = AsyncMock(return_value=("OK", [b"OK"]))
+        [
+            b'123 (FLAGS (\\Seen) RFC822 {200}',
+            bytearray(_email_headers),
+            b')',
+            b'A001 OK FETCH completed',
+        ]
+    )
+
+    async def _uid_router(cmd, *args, **kwargs):
+        if cmd in ("FETCH",):
+            return _fetch_response
+        return ("OK", [b"OK"])
+
+    mock_client.uid = AsyncMock(side_effect=_uid_router)
     mock_client.expunge = AsyncMock(return_value=("OK", []))
     mock_client.logout = AsyncMock(return_value=("OK", []))
     mock_client.close = AsyncMock()
@@ -223,13 +244,7 @@ async def test_mcp_call_all_tools_return_correct_schema(mock_settings):
             )
             assert response.status_code == 200
 
-            # Test reply_email
-            mock_client.fetch = AsyncMock(return_value=(
-                "OK",
-                [(b'123 (RFC822 {200}',
-                  b'From: sender@test.com\r\nTo: me@test.com\r\nSubject: Original\r\nMessage-ID: <orig@test.com>\r\n\r\nBody'),
-                 b')']
-            ))
+            # Test reply_email — uid() already returns the right flat response
 
             response = client.post(
                 "/mcp/call",

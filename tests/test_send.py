@@ -232,6 +232,10 @@ async def test_send_email_sets_date_header(mock_settings):
         msg = mock_send.call_args[0][0]
         assert msg["Date"] is not None
         assert msg["Date"] != ""
+
+
+@pytest.mark.asyncio
+async def test_save_to_sent_appends_via_imap(mock_settings):
     """Test that _save_to_sent discovers the Sent folder and calls IMAP APPEND."""
     from email.message import EmailMessage
     from smtp.client import _save_to_sent

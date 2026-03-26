@@ -95,7 +95,12 @@ async def _save_to_sent(msg: EmailMessage) -> None:
         msg: The EmailMessage that was successfully sent via SMTP.
     """
     try:
-        raw_bytes = msg.as_bytes()
+        # Strip Bcc before serialising — the Sent copy must not expose BCC
+        # recipients to anyone who later reads the Sent folder.
+        import copy as _copy
+        msg_for_sent = _copy.copy(msg)
+        del msg_for_sent["Bcc"]
+        raw_bytes = msg_for_sent.as_bytes()
         async with imap_pool.acquire_connection() as client:
             sent_folder = await _find_sent_folder(client)
             if sent_folder is None:

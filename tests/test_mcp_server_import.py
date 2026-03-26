@@ -26,9 +26,20 @@ def test_mcp_server_importable(monkeypatch):
     # Must NOT raise
     import importlib
     import sys
-    # Remove cached modules so fresh import picks up monkeypatched env
+    # Remove cached modules so fresh import picks up monkeypatched env.
+    # Include all modules that import config at module scope so the
+    # monkeypatched env vars are visible to every dependent module.
+    modules_to_clear = (
+        "config",
+        "imap.client",
+        "imap.read",
+        "imap.search",
+        "imap.flags",
+        "smtp.client",
+        "mcp_server",
+    )
     for mod in list(sys.modules.keys()):
-        if mod in ("config", "imap.client", "mcp_server"):
+        if mod in modules_to_clear:
             del sys.modules[mod]
 
     import mcp_server  # noqa: F401
