@@ -4,10 +4,11 @@ Email MCP Server - Main Application Entry Point
 FastAPI application providing MCP-compliant email access via IMAP and SMTP.
 """
 
-from fastapi import FastAPI, Depends
+from fastapi import FastAPI, Depends, Request, HTTPException, Header
 from fastapi.middleware.cors import CORSMiddleware
 from config import settings
-from tools.mcp_routes import router as mcp_router
+from tools.mcp_routes import router as mcp_router, MCPToolCallRequest, MCPToolCallResponse
+from auth import verify_api_key
 
 app = FastAPI(
     title="Email MCP Server",
@@ -57,12 +58,29 @@ async def mcp_server_info():
             ]
         },
         "endpoints": {
-            "main": "POST /mcp/call (MCP tool calls)",
+            "main": "POST /mcp (JSON-RPC 2.0)",
             "info": "GET /mcp",
             "health": "GET /health",
             "tools": "GET /mcp/tools"
         }
     }
+
+
+@app.post("/mcp")
+async def mcp_tool_call(request: MCPToolCallRequest, api_key: str = Depends(verify_api_key)) -> MCPToolCallResponse:
+    """MCP tool execution endpoint - handles JSON-RPC 2.0 tool calls with authentication."""
+    if request.method != "tools/call":
+        raise HTTPException(status_code=400, detail=f"Unsupported method: {request.method}")
+
+    tool_name = request.params.get("name")
+    arguments = request.params.get("arguments", {})
+
+    if not tool_name:
+        raise HTTPException(status_code=400, detail="Missing tool name")
+
+    # Import here to avoid circular imports
+    from tools.handlers import execute_tool
+    return await execute_tool(tool_name, arguments)
 
 
 @app.get("/health")
