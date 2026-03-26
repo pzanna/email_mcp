@@ -9,6 +9,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from config import settings
 from tools.mcp_routes import router as mcp_router, MCPToolCallRequest, MCPToolCallResponse
 from auth import verify_api_key
+from typing import Union, Any
+from pydantic import BaseModel
 
 app = FastAPI(
     title="Email MCP Server",
@@ -24,6 +26,17 @@ app.add_middleware(
     allow_methods=["GET", "POST"],
     allow_headers=["*"],
 )
+
+
+class MCPInitializeResponse(BaseModel):
+    """MCP initialize response format."""
+    protocolVersion: str
+    capabilities: dict[str, Any]
+    serverInfo: dict[str, str]
+
+
+# Union type to handle different MCP response types
+MCPResponse = Union[MCPInitializeResponse, MCPToolCallResponse]
 
 
 @app.get("/mcp")
@@ -67,20 +80,48 @@ async def mcp_server_info():
 
 
 @app.post("/mcp")
-async def mcp_tool_call(request: MCPToolCallRequest, api_key: str = Depends(verify_api_key)) -> MCPToolCallResponse:
-    """MCP tool execution endpoint - handles JSON-RPC 2.0 tool calls with authentication."""
-    if request.method != "tools/call":
+async def mcp_tool_call(request: MCPToolCallRequest, api_key: str = Depends(verify_api_key)) -> MCPResponse:
+    """MCP endpoint - handles JSON-RPC 2.0 initialize and tool calls with authentication."""
+    # Debug logging
+    import logging
+    logger = logging.getLogger(__name__)
+    logger.info(f"Received MCP request: method='{request.method}', params={request.params}")
+
+    if request.method == "initialize":
+        # Handle MCP initialization handshake
+        logger.info("Handling MCP initialize request")
+        return MCPInitializeResponse(
+            protocolVersion="2025-03-26",
+            capabilities={
+                "tools": {
+                    "listChanged": False
+                },
+                "logging": {},
+            },
+            serverInfo={
+                "name": "email-mcp",
+                "version": "0.1.0"
+            }
+        )
+
+    elif request.method == "tools/call":
+        # Handle tool execution
+        tool_name = request.params.get("name")
+        arguments = request.params.get("arguments", {})
+
+        if not tool_name:
+            logger.error(f"Missing tool name in params: {request.params}")
+            raise HTTPException(status_code=400, detail="Missing tool name")
+
+        logger.info(f"Executing tool: {tool_name} with args: {arguments}")
+
+        # Import here to avoid circular imports
+        from tools.handlers import execute_tool
+        return await execute_tool(tool_name, arguments)
+
+    else:
+        logger.error(f"Unsupported method: {request.method}")
         raise HTTPException(status_code=400, detail=f"Unsupported method: {request.method}")
-
-    tool_name = request.params.get("name")
-    arguments = request.params.get("arguments", {})
-
-    if not tool_name:
-        raise HTTPException(status_code=400, detail="Missing tool name")
-
-    # Import here to avoid circular imports
-    from tools.handlers import execute_tool
-    return await execute_tool(tool_name, arguments)
 
 
 @app.get("/health")
