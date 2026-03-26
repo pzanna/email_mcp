@@ -6,7 +6,7 @@
   "description": "Access your email via IMAP and SMTP — search, read, flag, move, send and reply to messages.",
   "long_description": "Email MCP connects Claude to your email account over IMAP (reading) and SMTP (sending). All seven tools are available: list folders, search emails, read email, mark email, move email, send email, and reply to email. Credentials are collected once via the settings UI and stored securely in the OS keychain.",
   "author": {
-    "name": "paulzanna"
+    "name": "Paul Zanna"
   },
   "icon": "icon.png",
   "license": "MIT",
@@ -18,27 +18,48 @@
       "command": "uv",
       "args": ["run", "--directory", "${__dirname}", "python", "mcp_server.py"],
       "env": {
-        "IMAP_HOST":     "${user_config.imap_host}",
-        "IMAP_PORT":     "${user_config.imap_port}",
-        "IMAP_USER":     "${user_config.imap_user}",
+        "IMAP_HOST": "${user_config.imap_host}",
+        "IMAP_PORT": "${user_config.imap_port}",
+        "IMAP_USER": "${user_config.imap_user}",
         "IMAP_PASSWORD": "${user_config.imap_password}",
-        "IMAP_SSL":      "${user_config.imap_ssl}",
-        "SMTP_HOST":     "${user_config.smtp_host}",
-        "SMTP_PORT":     "${user_config.smtp_port}",
-        "SMTP_USER":     "${user_config.smtp_user}",
+        "IMAP_SSL": "${user_config.imap_ssl}",
+        "SMTP_HOST": "${user_config.smtp_host}",
+        "SMTP_PORT": "${user_config.smtp_port}",
+        "SMTP_USER": "${user_config.smtp_user}",
         "SMTP_PASSWORD": "${user_config.smtp_password}",
         "SMTP_STARTTLS": "${user_config.smtp_starttls}"
       }
     }
   },
   "tools": [
-    { "name": "list_folders",  "description": "List all IMAP mailboxes/folders available on the account" },
-    { "name": "search_emails", "description": "Search for emails using IMAP criteria. Returns message summaries (no body content)." },
-    { "name": "read_email",    "description": "Fetch the full content of a message by UID, including body and attachment metadata." },
-    { "name": "mark_email",    "description": "Set or clear flags on a message (read/unread, flagged/unflagged)." },
-    { "name": "move_email",    "description": "Move a message from one folder to another." },
-    { "name": "send_email",    "description": "Compose and send a new email via SMTP." },
-    { "name": "reply_email",   "description": "Reply to an existing message, preserving thread headers." }
+    {
+      "name": "list_folders",
+      "description": "List all IMAP mailboxes/folders available on the account"
+    },
+    {
+      "name": "search_emails",
+      "description": "Search for emails using IMAP criteria. Returns message summaries (no body content)."
+    },
+    {
+      "name": "read_email",
+      "description": "Fetch the full content of a message by UID, including body and attachment metadata."
+    },
+    {
+      "name": "mark_email",
+      "description": "Set or clear flags on a message (read/unread, flagged/unflagged)."
+    },
+    {
+      "name": "move_email",
+      "description": "Move a message from one folder to another."
+    },
+    {
+      "name": "send_email",
+      "description": "Compose and send a new email via SMTP."
+    },
+    {
+      "name": "reply_email",
+      "description": "Reply to an existing message, preserving thread headers."
+    }
   ],
   "compatibility": {
     "platforms": ["darwin", "linux"],
