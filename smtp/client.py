@@ -1,6 +1,7 @@
 """SMTP client for sending emails."""
 
 import logging
+import sys
 from email.message import EmailMessage
 from email.utils import make_msgid
 from typing import Optional
@@ -89,29 +90,37 @@ async def _save_to_sent(msg: EmailMessage) -> None:
     Append the sent message to the IMAP Sent folder.
 
     Uses IMAP APPEND so the message appears in the Sent folder without
-    requiring a separate SMTP copy-to-self. Failures are logged but do
-    NOT propagate — a save failure must never prevent a successful send.
+    requiring a separate SMTP copy-to-self. Failures are printed to stderr
+    and do NOT propagate — a save failure must never prevent a successful send.
 
     Args:
         msg: The EmailMessage that was successfully sent via SMTP.
     """
+    print("[_save_to_sent] starting", file=sys.stderr, flush=True)
     try:
         raw_bytes = msg.as_bytes()
+        print("[_save_to_sent] acquiring IMAP connection", file=sys.stderr, flush=True)
         async with imap_pool.acquire_connection() as client:
+            print("[_save_to_sent] connection acquired, discovering Sent folder", file=sys.stderr, flush=True)
             sent_folder = await _find_sent_folder(client)
+            print(f"[_save_to_sent] sent_folder={sent_folder!r}", file=sys.stderr, flush=True)
             if sent_folder is None:
+                print("[_save_to_sent] no Sent folder found; skipping append", file=sys.stderr, flush=True)
                 logger.warning("Could not determine Sent folder name; skipping IMAP append")
                 return
 
-            # aioimaplib append signature: append(mailbox, message, flags=None, date_time=None)
             response = await client.append(sent_folder, raw_bytes)
+            print(f"[_save_to_sent] append response: {response[0]}", file=sys.stderr, flush=True)
             if response[0] != "OK":
+                print(f"[_save_to_sent] APPEND failed: {response}", file=sys.stderr, flush=True)
                 logger.warning(f"IMAP APPEND to '{sent_folder}' failed: {response}")
             else:
+                print(f"[_save_to_sent] message appended to '{sent_folder}' OK", file=sys.stderr, flush=True)
                 logger.debug(f"Message appended to '{sent_folder}'")
 
     except Exception as e:
         # Non-fatal: SMTP delivery already succeeded
+        print(f"[_save_to_sent] EXCEPTION: {type(e).__name__}: {e}", file=sys.stderr, flush=True)
         logger.warning(f"Failed to save message to Sent folder: {e}")
 
 
@@ -236,9 +245,11 @@ async def send_email(params: SendEmailInput) -> SendEmailResponse:
     message_id = await send_message(msg)
 
     # Save a copy to the Sent folder on the IMAP server (non-fatal)
+    print("[send_email] SMTP send succeeded; calling _save_to_sent", file=sys.stderr, flush=True)
     try:
         await _save_to_sent(msg)
     except Exception as e:
+        print(f"[send_email] _save_to_sent raised: {type(e).__name__}: {e}", file=sys.stderr, flush=True)
         logger.warning(f"Could not save outgoing message to Sent folder: {e}")
 
     return SendEmailResponse(success=True, message_id=message_id)
@@ -336,9 +347,11 @@ async def reply_email(params: ReplyEmailInput) -> ReplyEmailResponse:
     message_id = await send_message(msg)
 
     # Save a copy to the Sent folder on the IMAP server (non-fatal)
+    print("[reply_email] SMTP send succeeded; calling _save_to_sent", file=sys.stderr, flush=True)
     try:
         await _save_to_sent(msg)
     except Exception as e:
+        print(f"[reply_email] _save_to_sent raised: {type(e).__name__}: {e}", file=sys.stderr, flush=True)
         logger.warning(f"Could not save outgoing message to Sent folder: {e}")
 
     return ReplyEmailResponse(success=True, message_id=message_id)
