@@ -92,16 +92,20 @@ class IMAPPool:
                 logger.error(f"IMAP connection error: {e}")
                 raise IMAPConnectionError(f"CONNECTION_TIMEOUT: {str(e)}")
             finally:
-                # Clean up connection
+                # Clean up connection.
+                # CLOSE is only valid in SELECTED state — check before logout
+                # because logout() transitions the state to LOGOUT.
                 if client:
+                    if getattr(client, "protocol", None) and \
+                            getattr(client.protocol, "state", None) == "SELECTED":
+                        try:
+                            await client.close()
+                        except Exception as e:
+                            logger.warning(f"Error closing IMAP mailbox: {e}")
                     try:
                         await client.logout()
                     except Exception as e:
                         logger.warning(f"Error during IMAP logout: {e}")
-                    try:
-                        await client.close()
-                    except Exception as e:
-                        logger.warning(f"Error closing IMAP connection: {e}")
 
 
 # Global connection pool instance

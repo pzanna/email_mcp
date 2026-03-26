@@ -4,12 +4,27 @@ import re
 import logging
 from email import message_from_bytes
 from email.message import Message
+from email.utils import parsedate_to_datetime
 from typing import Optional
 from pydantic import BaseModel, Field, ConfigDict
 
 from imap.client import imap_pool
 
 logger = logging.getLogger(__name__)
+
+
+def _parse_date(raw: str) -> str:
+    """
+    Parse a raw RFC 2822 Date header value into an ISO 8601 string.
+
+    Returns empty string on any parse failure or missing header.
+    """
+    if not raw:
+        return ""
+    try:
+        return parsedate_to_datetime(raw).isoformat()
+    except Exception:
+        return ""
 
 
 class IMAPMessageNotFoundError(Exception):
@@ -42,8 +57,8 @@ async def list_folders() -> ListFoldersResponse:
         IMAPAuthError: If authentication fails
     """
     async with imap_pool.acquire_connection() as client:
-        # Get folder list
-        response = await client.list()
+        # Get folder list — aioimaplib requires both positional args
+        response = await client.list('""', "*")
 
         if response[0] != "OK":
             logger.error(f"LIST command failed: {response}")
@@ -137,28 +152,23 @@ async def read_email(params: ReadEmailInput) -> ReadEmailResponse:
         if response[0] != "OK":
             raise IMAPMessageNotFoundError(f"FOLDER_NOT_FOUND: {params.folder}")
 
-        # Fetch full message
-        response = await client.fetch(params.uid, "(RFC822)")
+        # Fetch full message via UID FETCH for stable addressing
+        response = await client.uid('FETCH', params.uid, "(RFC822)")
 
         if response[0] != "OK":
             raise IMAPMessageNotFoundError(f"MESSAGE_NOT_FOUND: UID {params.uid}")
 
         # Parse response
-        # Format can be: [(b'1 (UID 123 RFC822 {size}', b'email content'), b')']
-        # Or simpler mock format: [(header_bytes, content_bytes), close_paren]
+        # aioimaplib response[1] is a flat list:
+        #   [0] bytes     — metadata: "N FETCH (RFC822 {size}"
+        #   [1] bytearray — literal content (the full RFC822 message)
+        #   [2] bytes     — closing b')'
+        #   [3] bytes     — tagged OK line
         raw_data = response[1]
-        if not raw_data or len(raw_data) < 1:
+        if not raw_data or len(raw_data) < 2:
             raise IMAPMessageNotFoundError(f"MESSAGE_NOT_FOUND: UID {params.uid}")
 
-        # Extract email content
-        # If first element is a tuple, content is in the second part of the tuple
-        if isinstance(raw_data[0], tuple) and len(raw_data[0]) >= 2:
-            email_bytes = raw_data[0][1]
-        # Otherwise, might be the second element in the list
-        elif len(raw_data) >= 2 and isinstance(raw_data[1], bytes):
-            email_bytes = raw_data[1]
-        else:
-            raise IMAPMessageNotFoundError(f"MESSAGE_NOT_FOUND: UID {params.uid}")
+        email_bytes = raw_data[1]   # bytearray literal content
 
         if not email_bytes:
             raise IMAPMessageNotFoundError(f"MESSAGE_NOT_FOUND: UID {params.uid}")
@@ -171,7 +181,7 @@ async def read_email(params: ReadEmailInput) -> ReadEmailResponse:
         from_email = msg.get("From", "")
         to_str = msg.get("To", "")
         cc_str = msg.get("Cc", "")
-        date = msg.get("Date", "")
+        date = _parse_date(msg.get("Date") or msg.get("date") or "")
         message_id = msg.get("Message-ID")
         in_reply_to = msg.get("In-Reply-To")
 

@@ -1,6 +1,7 @@
 """IMAP flag operations: mark_email and move_email."""
 
 import logging
+import re
 from typing import Optional
 from pydantic import BaseModel, Field
 
@@ -55,11 +56,11 @@ async def mark_email(params: MarkEmailInput) -> MarkEmailResponse:
         # Apply read flag if specified
         if params.read is not None:
             if params.read:
-                # Add \Seen flag
-                response = await client.store(params.uid, "+FLAGS", "(\\Seen)")
+                # Add \Seen flag via UID STORE
+                response = await client.uid('STORE', params.uid, "+FLAGS", "(\\Seen)")
             else:
-                # Remove \Seen flag
-                response = await client.store(params.uid, "-FLAGS", "(\\Seen)")
+                # Remove \Seen flag via UID STORE
+                response = await client.uid('STORE', params.uid, "-FLAGS", "(\\Seen)")
 
             if response[0] != "OK":
                 raise IMAPMessageNotFoundError(f"MESSAGE_NOT_FOUND: UID {params.uid}")
@@ -67,11 +68,11 @@ async def mark_email(params: MarkEmailInput) -> MarkEmailResponse:
         # Apply flagged flag if specified
         if params.flagged is not None:
             if params.flagged:
-                # Add \Flagged flag
-                response = await client.store(params.uid, "+FLAGS", "(\\Flagged)")
+                # Add \Flagged flag via UID STORE
+                response = await client.uid('STORE', params.uid, "+FLAGS", "(\\Flagged)")
             else:
-                # Remove \Flagged flag
-                response = await client.store(params.uid, "-FLAGS", "(\\Flagged)")
+                # Remove \Flagged flag via UID STORE
+                response = await client.uid('STORE', params.uid, "-FLAGS", "(\\Flagged)")
 
             if response[0] != "OK":
                 raise IMAPMessageNotFoundError(f"MESSAGE_NOT_FOUND: UID {params.uid}")
@@ -97,6 +98,10 @@ async def move_email(params: MoveEmailInput) -> MoveEmailResponse:
     """
     Move a message from one folder to another.
 
+    Attempts RFC 6851 MOVE (atomic, preserves flags) first via UID MOVE.
+    If the server does not advertise the MOVE capability, falls back to
+    UID COPY + UID STORE \\Deleted + EXPUNGE.
+
     Args:
         params: Move email parameters
 
@@ -113,32 +118,65 @@ async def move_email(params: MoveEmailInput) -> MoveEmailResponse:
         if response[0] != "OK":
             raise IMAPFolderNotFoundError(f"FOLDER_NOT_FOUND: {params.from_folder}")
 
-        # Copy message to destination folder
-        response = await client.copy(params.uid, params.to_folder)
+        new_uid = None
 
-        if response[0] != "OK":
-            error_msg = response[1][0].decode() if response[1] else ""
-            if "not found" in error_msg.lower() or "TRYCREATE" in error_msg:
-                raise IMAPFolderNotFoundError(f"FOLDER_NOT_FOUND: {params.to_folder}")
-            else:
+        # Try RFC 6851 UID MOVE first (atomic, no expunge needed)
+        try:
+            response = await client.uid('MOVE', params.uid, params.to_folder)
+
+            if response[0] != "OK":
+                error_msg = ""
+                if response[1]:
+                    first = response[1][0]
+                    error_msg = (first.decode(errors="replace") if isinstance(first, bytes) else str(first))
+                if "not found" in error_msg.lower() or "TRYCREATE" in error_msg:
+                    raise IMAPFolderNotFoundError(f"FOLDER_NOT_FOUND: {params.to_folder}")
                 raise IMAPMessageNotFoundError(f"MESSAGE_NOT_FOUND: UID {params.uid}")
 
-        # Extract new UID if available (from COPYUID response)
-        new_uid = None
+            # Parse COPYUID / MOVEUID response for the new UID
+            if response[1]:
+                first = response[1][0]
+                response_str = first.decode(errors="replace") if isinstance(first, bytes) else str(first)
+                match = re.search(r'(?:COPY|MOVE)UID \d+ \d+ (\d+)', response_str)
+                if match:
+                    new_uid = match.group(1)
+
+            return MoveEmailResponse(success=True, new_uid=new_uid)
+
+        except Exception as e:
+            # If MOVE capability is absent, aioimaplib raises Abort with
+            # 'server has not MOVE capability'.  Fall through to COPY+DELETE.
+            if "MOVE capability" not in str(e):
+                raise
+
+            logger.debug(f"Server lacks MOVE capability; falling back to COPY+DELETE for UID {params.uid}")
+
+        # Fallback: UID COPY then mark deleted + expunge
+        response = await client.uid('COPY', params.uid, params.to_folder)
+
+        if response[0] != "OK":
+            error_msg = ""
+            if response[1]:
+                first = response[1][0]
+                error_msg = (first.decode(errors="replace") if isinstance(first, bytes) else str(first))
+            if "not found" in error_msg.lower() or "TRYCREATE" in error_msg:
+                raise IMAPFolderNotFoundError(f"FOLDER_NOT_FOUND: {params.to_folder}")
+            raise IMAPMessageNotFoundError(f"MESSAGE_NOT_FOUND: UID {params.uid}")
+
+        # Extract new UID from COPYUID response if available
         if response[1]:
-            response_str = response[1][0].decode() if isinstance(response[1][0], bytes) else str(response[1][0])
-            # Parse COPYUID response: [COPYUID uidvalidity src_uid dest_uid]
-            import re
+            first = response[1][0]
+            response_str = first.decode(errors="replace") if isinstance(first, bytes) else str(first)
             match = re.search(r'COPYUID \d+ \d+ (\d+)', response_str)
             if match:
                 new_uid = match.group(1)
 
-        # Mark source message as deleted
-        response = await client.store(params.uid, "+FLAGS", "(\\Deleted)")
+        # Mark source message as deleted via UID STORE
+        response = await client.uid('STORE', params.uid, "+FLAGS", "(\\Deleted)")
         if response[0] != "OK":
             logger.warning(f"Failed to mark UID {params.uid} as deleted")
 
-        # Expunge to permanently delete
+        # Expunge to permanently remove the deleted message
         response = await client.expunge()
         if response[0] != "OK":
             logger.warning(f"Failed to expunge folder {params.from_folder}")

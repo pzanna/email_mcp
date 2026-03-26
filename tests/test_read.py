@@ -150,6 +150,26 @@ async def test_list_folders_parses_flags_correctly(mock_settings):
         assert set(result.folders[2].flags) == {"\\Marked", "\\Flagged"}
 
 
+@pytest.mark.asyncio
+async def test_list_folders_passes_required_arguments(mock_settings):
+    """Test that list_folders calls client.list() with reference_name and mailbox_pattern."""
+    from imap.read import list_folders
+
+    mock_client = AsyncMock()
+    mock_client.list = AsyncMock(return_value=(
+        "OK",
+        [b'(\\HasNoChildren) "/" "INBOX"']
+    ))
+
+    with patch("imap.read.imap_pool") as mock_pool:
+        mock_pool.acquire_connection.return_value.__aenter__.return_value = mock_client
+
+        await list_folders()
+
+        # Must be called with the two required positional args
+        mock_client.list.assert_called_once_with('""', "*")
+
+
 # Tests for read_email tool
 @pytest.mark.asyncio
 async def test_read_email_fetches_full_message(mock_settings):
@@ -172,9 +192,9 @@ Content-Type: text/plain; charset=utf-8
 This is the email body.
 """
 
-    mock_client.fetch = AsyncMock(return_value=(
+    mock_client.uid = AsyncMock(return_value=(
         "OK",
-        [(b'1 (UID 123 RFC822 {300}', email_content), b')']
+        [b'1 (UID 123 RFC822 {300}', bytearray(email_content), b')', b'A001 OK FETCH completed']
     ))
 
     with patch("imap.read.imap_pool") as mock_pool:
@@ -189,6 +209,8 @@ This is the email body.
         assert "charlie@example.com" in result.cc
         assert result.message_id == "<msg123@example.com>"
         assert result.in_reply_to == "<prev@example.com>"
+        # Verify date is parsed to ISO 8601 format
+        assert result.date == "2024-03-10T09:15:00+00:00"
 
 
 @pytest.mark.asyncio
@@ -209,9 +231,9 @@ Content-Type: text/plain
 Body text.
 """
 
-    mock_client.fetch = AsyncMock(return_value=(
+    mock_client.uid = AsyncMock(return_value=(
         "OK",
-        [(b'1 (RFC822 {100}', email_content), b')']
+        [b'1 (RFC822 {100}', bytearray(email_content), b')', b'A001 OK FETCH completed']
     ))
 
     with patch("imap.read.imap_pool") as mock_pool:
@@ -262,9 +284,9 @@ Content-Transfer-Encoding: base64
 --boundary123--
 """
 
-    mock_client.fetch = AsyncMock(return_value=(
+    mock_client.uid = AsyncMock(return_value=(
         "OK",
-        [(b'1 (RFC822 {500}', email_content), b')']
+        [b'1 (RFC822 {500}', bytearray(email_content), b')', b'A001 OK FETCH completed']
     ))
 
     with patch("imap.read.imap_pool") as mock_pool:
@@ -289,7 +311,7 @@ async def test_read_email_handles_message_not_found(mock_settings):
 
     mock_client = AsyncMock()
     mock_client.select = AsyncMock(return_value=("OK", [b"1"]))
-    mock_client.fetch = AsyncMock(return_value=("NO", [b"Message not found"]))
+    mock_client.uid = AsyncMock(return_value=("NO", [b"Message not found"]))
 
     with patch("imap.read.imap_pool") as mock_pool:
         mock_pool.acquire_connection.return_value.__aenter__.return_value = mock_client
@@ -325,9 +347,9 @@ Content-Type: text/html
 --alt123--
 """
 
-    mock_client.fetch = AsyncMock(return_value=(
+    mock_client.uid = AsyncMock(return_value=(
         "OK",
-        [(b'1 (RFC822 {400}', email_content), b')']
+        [b'1 (RFC822 {400}', bytearray(email_content), b')', b'A001 OK FETCH completed']
     ))
 
     with patch("imap.read.imap_pool") as mock_pool:
@@ -358,9 +380,9 @@ Content-Type: text/plain
 Just plain text.
 """
 
-    mock_client.fetch = AsyncMock(return_value=(
+    mock_client.uid = AsyncMock(return_value=(
         "OK",
-        [(b'1 (RFC822 {200}', email_content), b')']
+        [b'1 (RFC822 {200}', bytearray(email_content), b')', b'A001 OK FETCH completed']
     ))
 
     with patch("imap.read.imap_pool") as mock_pool:

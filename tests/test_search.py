@@ -36,12 +36,14 @@ async def test_search_emails_by_sender(mock_settings):
 
     mock_client = AsyncMock()
     mock_client.select = AsyncMock(return_value=("OK", [b"5"]))
-    mock_client.search = AsyncMock(return_value=("OK", [b"1 2"]))
-    mock_client.fetch = AsyncMock(return_value=(
+    mock_client.uid_search = AsyncMock(return_value=("OK", [b"1 2"]))
+    mock_client.uid = AsyncMock(return_value=(
         "OK",
         [
-            (b'1 (RFC822.HEADER {200}', b'From: alice@example.com\r\nTo: bob@example.com\r\nSubject: Test 1\r\nDate: Mon, 01 Jan 2024 10:00:00 +0000\r\n\r\n'),
+            b'1 (RFC822.HEADER {200}',
+            bytearray(b'From: alice@example.com\r\nTo: bob@example.com\r\nSubject: Test 1\r\nDate: Mon, 01 Jan 2024 10:00:00 +0000\r\n\r\n'),
             b')',
+            b'A001 OK FETCH completed',
         ]
     ))
 
@@ -63,16 +65,18 @@ async def test_search_emails_respects_limit(mock_settings):
     mock_client.select = AsyncMock(return_value=("OK", [b"100"]))
     # Return 30 UIDs
     uids = " ".join(str(i) for i in range(1, 31))
-    mock_client.search = AsyncMock(return_value=("OK", [uids.encode()]))
+    mock_client.uid_search = AsyncMock(return_value=("OK", [uids.encode()]))
 
-    # Mock fetch to return minimal headers for each UID
-    def mock_fetch_side_effect(*args, **kwargs):
-        return ("OK", [
-            (b'1 (RFC822.HEADER {100}', b'From: test@test.com\r\nSubject: Test\r\nDate: Mon, 01 Jan 2024 10:00:00 +0000\r\n\r\n'),
+    # Mock uid() to return minimal headers for each UID FETCH
+    mock_client.uid = AsyncMock(return_value=(
+        "OK",
+        [
+            b'1 (RFC822.HEADER {100}',
+            bytearray(b'From: test@test.com\r\nSubject: Test\r\nDate: Mon, 01 Jan 2024 10:00:00 +0000\r\n\r\n'),
             b')',
-        ])
-
-    mock_client.fetch = AsyncMock(side_effect=mock_fetch_side_effect)
+            b'A001 OK FETCH completed',
+        ]
+    ))
 
     with patch("imap.search.imap_pool") as mock_pool:
         mock_pool.acquire_connection.return_value.__aenter__.return_value = mock_client
@@ -91,17 +95,20 @@ async def test_search_emails_returns_message_summaries(mock_settings):
 
     mock_client = AsyncMock()
     mock_client.select = AsyncMock(return_value=("OK", [b"5"]))
-    mock_client.search = AsyncMock(return_value=("OK", [b"123"]))
-    mock_client.fetch = AsyncMock(return_value=(
+    mock_client.uid_search = AsyncMock(return_value=("OK", [b"123"]))
+    mock_client.uid = AsyncMock(return_value=(
         "OK",
         [
-            (b'123 (UID 123 FLAGS (\\Seen) RFC822.HEADER {300}',
-             b'From: alice@example.com\r\n'
-             b'To: bob@example.com\r\n'
-             b'Subject: Quarterly Report\r\n'
-             b'Date: Mon, 10 Mar 2024 09:15:00 +0000\r\n'
-             b'Content-Type: text/plain\r\n\r\n'),
+            b'123 (UID 123 FLAGS (\\Seen) RFC822.HEADER {300}',
+            bytearray(
+                b'From: alice@example.com\r\n'
+                b'To: bob@example.com\r\n'
+                b'Subject: Quarterly Report\r\n'
+                b'Date: Mon, 10 Mar 2024 09:15:00 +0000\r\n'
+                b'Content-Type: text/plain\r\n\r\n'
+            ),
             b')',
+            b'A001 OK FETCH completed',
         ]
     ))
 
@@ -122,6 +129,9 @@ async def test_search_emails_returns_message_summaries(mock_settings):
         assert hasattr(msg, "unread")
         assert hasattr(msg, "flagged")
         assert hasattr(msg, "has_attachments")
+
+        # Verify date is parsed to ISO 8601 format
+        assert msg.date == "2024-03-10T09:15:00+00:00"
 
 
 @pytest.mark.asyncio
@@ -146,7 +156,7 @@ async def test_search_emails_handles_no_results(mock_settings):
 
     mock_client = AsyncMock()
     mock_client.select = AsyncMock(return_value=("OK", [b"0"]))
-    mock_client.search = AsyncMock(return_value=("OK", [b""]))  # No results
+    mock_client.uid_search = AsyncMock(return_value=("OK", [b""]))  # No results
 
     with patch("imap.search.imap_pool") as mock_pool:
         mock_pool.acquire_connection.return_value.__aenter__.return_value = mock_client
@@ -164,7 +174,7 @@ async def test_search_emails_parses_iso_dates(mock_settings):
 
     mock_client = AsyncMock()
     mock_client.select = AsyncMock(return_value=("OK", [b"5"]))
-    mock_client.search = AsyncMock(return_value=("OK", [b""]))
+    mock_client.uid_search = AsyncMock(return_value=("OK", [b""]))
 
     with patch("imap.search.imap_pool") as mock_pool:
         mock_pool.acquire_connection.return_value.__aenter__.return_value = mock_client
@@ -175,5 +185,5 @@ async def test_search_emails_parses_iso_dates(mock_settings):
             before="2024-03-01"
         ))
 
-        # Verify search was called (dates were parsed successfully)
-        mock_client.search.assert_called_once()
+        # Verify uid_search was called (dates were parsed successfully)
+        mock_client.uid_search.assert_called_once()

@@ -1,14 +1,30 @@
 """IMAP search operations."""
 
 import logging
+import re
 from datetime import datetime
 from email import message_from_bytes
+from email.utils import parsedate_to_datetime
 from typing import Optional
 from pydantic import BaseModel, Field, ConfigDict
 
 from imap.client import imap_pool
 
 logger = logging.getLogger(__name__)
+
+
+def _parse_date(raw: str) -> str:
+    """
+    Parse a raw RFC 2822 Date header value into an ISO 8601 string.
+
+    Returns empty string on any parse failure or missing header.
+    """
+    if not raw:
+        return ""
+    try:
+        return parsedate_to_datetime(raw).isoformat()
+    except Exception:
+        return ""
 
 
 class IMAPFolderNotFoundError(Exception):
@@ -115,8 +131,8 @@ async def search_emails(params: SearchEmailsInput) -> SearchEmailsResponse:
         else:
             search_str = ' '.join(criteria)
 
-        # Execute search
-        response = await client.search(search_str)
+        # Execute UID SEARCH for stable addressing
+        response = await client.uid_search(search_str)
 
         if response[0] != "OK":
             logger.error(f"SEARCH failed: {response}")
@@ -130,40 +146,43 @@ async def search_emails(params: SearchEmailsInput) -> SearchEmailsResponse:
         uids = uid_data.decode().split()
         total = len(uids)
 
-        # Apply limit
-        uids = uids[:limit]
+        # Apply limit — most-recent messages are last; reverse so newest come first
+        uids = uids[-limit:][::-1]
 
         # Fetch message summaries
         messages = []
         for uid in uids:
             try:
-                # Fetch headers and flags
-                fetch_response = await client.fetch(uid, '(UID FLAGS RFC822.HEADER)')
+                # Fetch headers and flags for this message via UID FETCH
+                fetch_response = await client.uid('FETCH', uid, '(FLAGS RFC822.HEADER)')
 
                 if fetch_response[0] != "OK":
                     logger.warning(f"Failed to fetch UID {uid}")
                     continue
 
-                # Parse response
-                # Format: [(b'1 (UID 123 FLAGS (\\Seen) RFC822.HEADER {size}', b'headers...'), b')']
+                # aioimaplib response[1] is a flat list:
+                #   [0] bytes     — metadata: "N FETCH (FLAGS (...) RFC822.HEADER {size}"
+                #   [1] bytearray — literal content (the header bytes)
+                #   [2] bytes     — closing b')'
+                #   [3] bytes     — tagged OK line
                 raw_data = fetch_response[1]
+
                 if not raw_data or len(raw_data) < 2:
                     continue
 
-                # Extract headers (second element)
-                headers_bytes = raw_data[1] if len(raw_data) > 1 else b""
+                metadata_bytes = raw_data[0]
+                headers_bytes = raw_data[1]   # bytearray literal content
+
                 if not headers_bytes:
                     continue
 
                 # Parse email headers
                 msg = message_from_bytes(headers_bytes)
 
-                # Extract flags from first element
-                flags_line = raw_data[0][0].decode() if raw_data[0] else ""
+                # Extract flags from the metadata line
+                flags_line = metadata_bytes.decode(errors="replace") if isinstance(metadata_bytes, bytes) else str(metadata_bytes)
                 flags = []
                 if "FLAGS" in flags_line:
-                    # Extract flags between parentheses after FLAGS
-                    import re
                     flags_match = re.search(r'FLAGS \(([^)]*)\)', flags_line)
                     if flags_match:
                         flags = flags_match.group(1).split()
@@ -172,8 +191,6 @@ async def search_emails(params: SearchEmailsInput) -> SearchEmailsResponse:
                 from_email = msg.get("From", "")
                 to_str = msg.get("To", "")
                 to_list = [addr.strip() for addr in to_str.split(",") if addr.strip()]
-
-                # Check for attachments (simple heuristic - look for Content-Disposition)
                 has_attachments = "attachment" in msg.get("Content-Disposition", "").lower()
 
                 summary = MessageSummary(
@@ -181,7 +198,7 @@ async def search_emails(params: SearchEmailsInput) -> SearchEmailsResponse:
                     subject=msg.get("Subject", ""),
                     from_email=from_email,
                     to=to_list,
-                    date=msg.get("Date", ""),
+                    date=_parse_date(msg.get("Date") or msg.get("date") or ""),
                     unread="\\Seen" not in flags,
                     flagged="\\Flagged" in flags,
                     has_attachments=has_attachments,

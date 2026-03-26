@@ -1,12 +1,17 @@
 """SMTP client for sending emails."""
 
 import logging
+import re
 from email.message import EmailMessage
-from email.utils import make_msgid
+from email.utils import make_msgid, formatdate
 from typing import Optional
 from pydantic import BaseModel, Field
 from aiosmtplib import SMTP
 from config import settings
+from imap.client import imap_pool
+
+# Common fallback names tried in order when no \Sent flag is found
+_SENT_FOLDER_CANDIDATES = ["Sent", "Sent Messages", "Sent Items"]
 
 logger = logging.getLogger(__name__)
 
@@ -30,6 +35,87 @@ def _smtp_starttls_connect_arg(starttls_setting: str) -> bool | None:
     if starttls_setting == "false":
         return False
     raise ValueError('SMTP_STARTTLS must be one of: "none", "true", "false"')
+
+
+async def _find_sent_folder(client) -> Optional[str]:
+    """
+    Discover the Sent folder name on the IMAP server.
+
+    First looks for a folder carrying the \\Sent special-use attribute.
+    If none is found, falls back to checking common names in order:
+    "Sent", "Sent Messages", "Sent Items".
+
+    Args:
+        client: An authenticated aioimaplib client
+
+    Returns:
+        The folder name string, or None if no Sent folder could be found.
+    """
+    response = await client.list('""', "*")
+    if response[0] != "OK":
+        return None
+
+    folder_names: list[str] = []
+
+    for line in response[1]:
+        if not line:
+            continue
+        line_str = line.decode() if isinstance(line, bytes) else line
+        match = re.match(r'\(([^)]*)\)\s+"?([^"]+)"?\s+"?([^"]+)"?', line_str)
+        if not match:
+            continue
+        flags_str, _delimiter, name = match.groups()
+        name = name.strip('"').strip()
+        flags = [f.strip().lower() for f in flags_str.split() if f.strip()]
+
+        # Prefer folder explicitly marked as \Sent
+        if r"\sent" in flags:
+            return name
+
+        folder_names.append(name)
+
+    # Fall back to well-known names (case-insensitive match)
+    lower_names = {n.lower(): n for n in folder_names}
+    for candidate in _SENT_FOLDER_CANDIDATES:
+        if candidate.lower() in lower_names:
+            return lower_names[candidate.lower()]
+
+    return None
+
+
+async def _save_to_sent(msg: EmailMessage) -> None:
+    """
+    Append the sent message to the IMAP Sent folder.
+
+    Uses IMAP APPEND so the message appears in the Sent folder without
+    requiring a separate SMTP copy-to-self. Failures are logged and do NOT
+    propagate — a save failure must never prevent a successful send.
+
+    Args:
+        msg: The EmailMessage that was successfully sent via SMTP.
+    """
+    try:
+        # Strip Bcc before serialising — the Sent copy must not expose BCC
+        # recipients to anyone who later reads the Sent folder.
+        import copy as _copy
+        msg_for_sent = _copy.copy(msg)
+        del msg_for_sent["Bcc"]
+        raw_bytes = msg_for_sent.as_bytes()
+        async with imap_pool.acquire_connection() as client:
+            sent_folder = await _find_sent_folder(client)
+            if sent_folder is None:
+                logger.warning("Could not determine Sent folder name; skipping IMAP append")
+                return
+
+            response = await client.append(raw_bytes, sent_folder)
+            if response[0] != "OK":
+                logger.warning(f"IMAP APPEND to '{sent_folder}' failed: {response}")
+            else:
+                logger.debug(f"Message appended to '{sent_folder}'")
+
+    except Exception as e:
+        # Non-fatal: SMTP delivery already succeeded
+        logger.warning(f"Failed to save message to Sent folder: {e}")
 
 
 async def send_message(msg: EmailMessage) -> str:
@@ -136,9 +222,11 @@ async def send_email(params: SendEmailInput) -> SendEmailResponse:
         msg["Bcc"] = ", ".join(params.bcc)
     msg["Subject"] = params.subject
 
-    # Generate Message-ID if not present
+    # Generate Message-ID and set Date if not present
     if "Message-ID" not in msg:
         msg["Message-ID"] = make_msgid()
+    if "Date" not in msg:
+        msg["Date"] = formatdate(localtime=True)
 
     # Set body
     if params.body_html:
@@ -151,6 +239,12 @@ async def send_email(params: SendEmailInput) -> SendEmailResponse:
 
     # Send via SMTP
     message_id = await send_message(msg)
+
+    # Save a copy to the Sent folder on the IMAP server (non-fatal)
+    try:
+        await _save_to_sent(msg)
+    except Exception as e:
+        logger.warning(f"Could not save outgoing message to Sent folder: {e}")
 
     return SendEmailResponse(success=True, message_id=message_id)
 
@@ -233,8 +327,9 @@ async def reply_email(params: ReplyEmailInput) -> ReplyEmailResponse:
     if references:
         msg["References"] = " ".join(references)
 
-    # Generate Message-ID
+    # Generate Message-ID and set Date
     msg["Message-ID"] = make_msgid()
+    msg["Date"] = formatdate(localtime=True)
 
     # Set body
     if params.body_html:
@@ -245,5 +340,11 @@ async def reply_email(params: ReplyEmailInput) -> ReplyEmailResponse:
 
     # Send via SMTP
     message_id = await send_message(msg)
+
+    # Save a copy to the Sent folder on the IMAP server (non-fatal)
+    try:
+        await _save_to_sent(msg)
+    except Exception as e:
+        logger.warning(f"Could not save outgoing message to Sent folder: {e}")
 
     return ReplyEmailResponse(success=True, message_id=message_id)
