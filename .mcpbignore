@@ -11,5 +11,9 @@ pytest.ini
 generate_icon.py
 email-mcp.service
 docs/
+.docs/
+.claude/
+.pytest_cache/
 *.mcpb
 node_modules
+requirements.txt
