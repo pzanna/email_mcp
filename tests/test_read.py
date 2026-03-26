@@ -150,6 +150,26 @@ async def test_list_folders_parses_flags_correctly(mock_settings):
         assert set(result.folders[2].flags) == {"\\Marked", "\\Flagged"}
 
 
+@pytest.mark.asyncio
+async def test_list_folders_passes_required_arguments(mock_settings):
+    """Test that list_folders calls client.list() with reference_name and mailbox_pattern."""
+    from imap.read import list_folders
+
+    mock_client = AsyncMock()
+    mock_client.list = AsyncMock(return_value=(
+        "OK",
+        [b'(\\HasNoChildren) "/" "INBOX"']
+    ))
+
+    with patch("imap.read.imap_pool") as mock_pool:
+        mock_pool.acquire_connection.return_value.__aenter__.return_value = mock_client
+
+        await list_folders()
+
+        # Must be called with the two required positional args
+        mock_client.list.assert_called_once_with('""', "*")
+
+
 # Tests for read_email tool
 @pytest.mark.asyncio
 async def test_read_email_fetches_full_message(mock_settings):

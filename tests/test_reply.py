@@ -239,3 +239,69 @@ async def test_reply_email_handles_message_not_found(mock_settings):
 
         with pytest.raises(IMAPMessageNotFoundError):
             await reply_email(ReplyEmailInput(uid="999", body="Reply"))
+
+
+@pytest.mark.asyncio
+async def test_reply_email_saves_to_sent_folder(mock_settings):
+    """Test that reply_email calls _save_to_sent after a successful send."""
+    from smtp.client import reply_email, ReplyEmailInput
+    from imap.read import ReadEmailResponse
+
+    original = ReadEmailResponse(
+        uid="123",
+        subject="Original Subject",
+        from_email="alice@example.com",
+        to=["bob@example.com"],
+        cc=[],
+        date="Mon, 10 Mar 2024 09:15:00 +0000",
+        body_text="Original body",
+        body_html="",
+        attachments=[],
+        message_id="<orig@example.com>",
+        in_reply_to=None
+    )
+
+    with patch("imap.read.read_email", new_callable=AsyncMock) as mock_read, \
+         patch("smtp.client.send_message", new_callable=AsyncMock) as mock_send, \
+         patch("smtp.client._save_to_sent", new_callable=AsyncMock) as mock_save:
+        mock_read.return_value = original
+        mock_send.return_value = "<reply123@test.com>"
+
+        result = await reply_email(ReplyEmailInput(uid="123", body="My reply"))
+
+        assert result.success is True
+        mock_save.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_reply_email_succeeds_even_if_save_to_sent_errors(mock_settings):
+    """Test that reply_email succeeds even if _save_to_sent raises an exception."""
+    from smtp.client import reply_email, ReplyEmailInput
+    from imap.read import ReadEmailResponse
+
+    original = ReadEmailResponse(
+        uid="123",
+        subject="Test",
+        from_email="alice@example.com",
+        to=["bob@example.com"],
+        cc=[],
+        date="Mon, 10 Mar 2024 09:15:00 +0000",
+        body_text="Body",
+        body_html="",
+        attachments=[],
+        message_id="<orig@example.com>",
+        in_reply_to=None
+    )
+
+    with patch("imap.read.read_email", new_callable=AsyncMock) as mock_read, \
+         patch("smtp.client.send_message", new_callable=AsyncMock) as mock_send, \
+         patch("smtp.client._save_to_sent", new_callable=AsyncMock) as mock_save:
+        mock_read.return_value = original
+        mock_send.return_value = "<reply123@test.com>"
+        mock_save.side_effect = Exception("IMAP down")
+
+        # send failure must not propagate
+        result = await reply_email(ReplyEmailInput(uid="123", body="Reply"))
+
+        assert result.success is True
+        assert result.message_id == "<reply123@test.com>"

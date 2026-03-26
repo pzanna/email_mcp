@@ -42,8 +42,8 @@ async def list_folders() -> ListFoldersResponse:
         IMAPAuthError: If authentication fails
     """
     async with imap_pool.acquire_connection() as client:
-        # Get folder list
-        response = await client.list()
+        # Get folder list — aioimaplib requires both positional args
+        response = await client.list('""', "*")
 
         if response[0] != "OK":
             logger.error(f"LIST command failed: {response}")

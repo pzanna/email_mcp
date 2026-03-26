@@ -169,3 +169,139 @@ async def test_send_email_handles_send_failed(mock_settings):
                 subject="Test",
                 body="Body"
             ))
+
+
+@pytest.mark.asyncio
+async def test_send_email_saves_to_sent_folder(mock_settings):
+    """Test that send_email calls _save_to_sent after a successful send."""
+    from smtp.client import send_email, SendEmailInput
+
+    with patch("smtp.client.send_message", new_callable=AsyncMock) as mock_send, \
+         patch("smtp.client._save_to_sent", new_callable=AsyncMock) as mock_save:
+        mock_send.return_value = "<msg123@test.com>"
+
+        result = await send_email(SendEmailInput(
+            to=["user@example.com"],
+            subject="Test",
+            body="Body"
+        ))
+
+        assert result.success is True
+        # _save_to_sent must be called exactly once with the composed EmailMessage
+        mock_save.assert_called_once()
+        msg_arg = mock_save.call_args[0][0]
+        assert msg_arg["Subject"] == "Test"
+
+
+@pytest.mark.asyncio
+async def test_send_email_does_not_fail_when_save_to_sent_errors(mock_settings):
+    """Test that send_email succeeds even if _save_to_sent raises an exception."""
+    from smtp.client import send_email, SendEmailInput
+
+    with patch("smtp.client.send_message", new_callable=AsyncMock) as mock_send, \
+         patch("smtp.client._save_to_sent", new_callable=AsyncMock) as mock_save:
+        mock_send.return_value = "<msg123@test.com>"
+        mock_save.side_effect = Exception("IMAP unavailable")
+
+        # Should not raise — save failure is non-fatal
+        result = await send_email(SendEmailInput(
+            to=["user@example.com"],
+            subject="Test",
+            body="Body"
+        ))
+
+        assert result.success is True
+        assert result.message_id == "<msg123@test.com>"
+
+
+@pytest.mark.asyncio
+async def test_save_to_sent_appends_via_imap(mock_settings):
+    """Test that _save_to_sent discovers the Sent folder and calls IMAP APPEND."""
+    from email.message import EmailMessage
+    from smtp.client import _save_to_sent
+
+    msg = EmailMessage()
+    msg["From"] = "test@test.com"
+    msg["To"] = "user@example.com"
+    msg["Subject"] = "Saved to Sent"
+    msg.set_content("Body")
+
+    mock_client = AsyncMock()
+    mock_client.list = AsyncMock(return_value=(
+        "OK",
+        [
+            b'(\\HasNoChildren) "/" "INBOX"',
+            b'(\\HasNoChildren \\Sent) "/" "Sent"',
+        ]
+    ))
+    mock_client.append = AsyncMock(return_value=("OK", [b"APPEND complete"]))
+
+    with patch("smtp.client.imap_pool") as mock_pool:
+        mock_pool.acquire_connection.return_value.__aenter__.return_value = mock_client
+
+        await _save_to_sent(msg)
+
+        mock_client.append.assert_called_once()
+        call_args = mock_client.append.call_args[0]
+        assert call_args[0] == "Sent"       # correct folder name
+        assert isinstance(call_args[1], bytes)  # raw message bytes
+
+
+@pytest.mark.asyncio
+async def test_save_to_sent_falls_back_to_common_name(mock_settings):
+    """Test that _save_to_sent falls back to 'Sent Messages' when no \\Sent flag."""
+    from email.message import EmailMessage
+    from smtp.client import _save_to_sent
+
+    msg = EmailMessage()
+    msg["From"] = "test@test.com"
+    msg["To"] = "user@example.com"
+    msg["Subject"] = "Fallback test"
+    msg.set_content("Body")
+
+    mock_client = AsyncMock()
+    mock_client.list = AsyncMock(return_value=(
+        "OK",
+        [
+            b'(\\HasNoChildren) "/" "INBOX"',
+            b'(\\HasNoChildren) "/" "Sent Messages"',
+        ]
+    ))
+    mock_client.append = AsyncMock(return_value=("OK", [b"APPEND complete"]))
+
+    with patch("smtp.client.imap_pool") as mock_pool:
+        mock_pool.acquire_connection.return_value.__aenter__.return_value = mock_client
+
+        await _save_to_sent(msg)
+
+        mock_client.append.assert_called_once()
+        assert mock_client.append.call_args[0][0] == "Sent Messages"
+
+
+@pytest.mark.asyncio
+async def test_save_to_sent_skips_gracefully_when_no_sent_folder(mock_settings):
+    """Test that _save_to_sent logs and returns without error when no Sent folder found."""
+    from email.message import EmailMessage
+    from smtp.client import _save_to_sent
+
+    msg = EmailMessage()
+    msg["From"] = "test@test.com"
+    msg["To"] = "user@example.com"
+    msg["Subject"] = "No sent folder"
+    msg.set_content("Body")
+
+    mock_client = AsyncMock()
+    mock_client.list = AsyncMock(return_value=(
+        "OK",
+        [b'(\\HasNoChildren) "/" "INBOX"']
+    ))
+    mock_client.append = AsyncMock()
+
+    with patch("smtp.client.imap_pool") as mock_pool:
+        mock_pool.acquire_connection.return_value.__aenter__.return_value = mock_client
+
+        # Must not raise
+        await _save_to_sent(msg)
+
+        # append should NOT have been called
+        mock_client.append.assert_not_called()
