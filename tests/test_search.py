@@ -40,8 +40,10 @@ async def test_search_emails_by_sender(mock_settings):
     mock_client.fetch = AsyncMock(return_value=(
         "OK",
         [
-            (b'1 (RFC822.HEADER {200}', b'From: alice@example.com\r\nTo: bob@example.com\r\nSubject: Test 1\r\nDate: Mon, 01 Jan 2024 10:00:00 +0000\r\n\r\n'),
+            b'1 (RFC822.HEADER {200}',
+            bytearray(b'From: alice@example.com\r\nTo: bob@example.com\r\nSubject: Test 1\r\nDate: Mon, 01 Jan 2024 10:00:00 +0000\r\n\r\n'),
             b')',
+            b'A001 OK FETCH completed',
         ]
     ))
 
@@ -68,8 +70,10 @@ async def test_search_emails_respects_limit(mock_settings):
     # Mock fetch to return minimal headers for each UID
     def mock_fetch_side_effect(*args, **kwargs):
         return ("OK", [
-            (b'1 (RFC822.HEADER {100}', b'From: test@test.com\r\nSubject: Test\r\nDate: Mon, 01 Jan 2024 10:00:00 +0000\r\n\r\n'),
+            b'1 (RFC822.HEADER {100}',
+            bytearray(b'From: test@test.com\r\nSubject: Test\r\nDate: Mon, 01 Jan 2024 10:00:00 +0000\r\n\r\n'),
             b')',
+            b'A001 OK FETCH completed',
         ])
 
     mock_client.fetch = AsyncMock(side_effect=mock_fetch_side_effect)
@@ -95,13 +99,16 @@ async def test_search_emails_returns_message_summaries(mock_settings):
     mock_client.fetch = AsyncMock(return_value=(
         "OK",
         [
-            (b'123 (UID 123 FLAGS (\\Seen) RFC822.HEADER {300}',
-             b'From: alice@example.com\r\n'
-             b'To: bob@example.com\r\n'
-             b'Subject: Quarterly Report\r\n'
-             b'Date: Mon, 10 Mar 2024 09:15:00 +0000\r\n'
-             b'Content-Type: text/plain\r\n\r\n'),
+            b'123 (UID 123 FLAGS (\\Seen) RFC822.HEADER {300}',
+            bytearray(
+                b'From: alice@example.com\r\n'
+                b'To: bob@example.com\r\n'
+                b'Subject: Quarterly Report\r\n'
+                b'Date: Mon, 10 Mar 2024 09:15:00 +0000\r\n'
+                b'Content-Type: text/plain\r\n\r\n'
+            ),
             b')',
+            b'A001 OK FETCH completed',
         ]
     ))
 

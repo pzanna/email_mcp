@@ -194,7 +194,7 @@ This is the email body.
 
     mock_client.fetch = AsyncMock(return_value=(
         "OK",
-        [(b'1 (UID 123 RFC822 {300}', email_content), b')']
+        [b'1 (UID 123 RFC822 {300}', bytearray(email_content), b')', b'A001 OK FETCH completed']
     ))
 
     with patch("imap.read.imap_pool") as mock_pool:
@@ -231,7 +231,7 @@ Body text.
 
     mock_client.fetch = AsyncMock(return_value=(
         "OK",
-        [(b'1 (RFC822 {100}', email_content), b')']
+        [b'1 (RFC822 {100}', bytearray(email_content), b')', b'A001 OK FETCH completed']
     ))
 
     with patch("imap.read.imap_pool") as mock_pool:
@@ -284,7 +284,7 @@ Content-Transfer-Encoding: base64
 
     mock_client.fetch = AsyncMock(return_value=(
         "OK",
-        [(b'1 (RFC822 {500}', email_content), b')']
+        [b'1 (RFC822 {500}', bytearray(email_content), b')', b'A001 OK FETCH completed']
     ))
 
     with patch("imap.read.imap_pool") as mock_pool:
@@ -347,7 +347,7 @@ Content-Type: text/html
 
     mock_client.fetch = AsyncMock(return_value=(
         "OK",
-        [(b'1 (RFC822 {400}', email_content), b')']
+        [b'1 (RFC822 {400}', bytearray(email_content), b')', b'A001 OK FETCH completed']
     ))
 
     with patch("imap.read.imap_pool") as mock_pool:
@@ -380,7 +380,7 @@ Just plain text.
 
     mock_client.fetch = AsyncMock(return_value=(
         "OK",
-        [(b'1 (RFC822 {200}', email_content), b')']
+        [b'1 (RFC822 {200}', bytearray(email_content), b')', b'A001 OK FETCH completed']
     ))
 
     with patch("imap.read.imap_pool") as mock_pool:

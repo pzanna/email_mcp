@@ -243,8 +243,8 @@ async def test_save_to_sent_appends_via_imap(mock_settings):
 
         mock_client.append.assert_called_once()
         call_args = mock_client.append.call_args[0]
-        assert call_args[0] == "Sent"       # correct folder name
-        assert isinstance(call_args[1], bytes)  # raw message bytes
+        assert isinstance(call_args[0], bytes)  # raw message bytes first
+        assert call_args[1] == "Sent"           # mailbox name second
 
 
 @pytest.mark.asyncio
@@ -275,7 +275,7 @@ async def test_save_to_sent_falls_back_to_common_name(mock_settings):
         await _save_to_sent(msg)
 
         mock_client.append.assert_called_once()
-        assert mock_client.append.call_args[0][0] == "Sent Messages"
+        assert mock_client.append.call_args[0][1] == "Sent Messages"
 
 
 @pytest.mark.asyncio

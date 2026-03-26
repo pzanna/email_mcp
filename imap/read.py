@@ -137,28 +137,23 @@ async def read_email(params: ReadEmailInput) -> ReadEmailResponse:
         if response[0] != "OK":
             raise IMAPMessageNotFoundError(f"FOLDER_NOT_FOUND: {params.folder}")
 
-        # Fetch full message
-        response = await client.fetch(params.uid, "(RFC822)")
+        # Fetch full message using UID for stable addressing
+        response = await client.fetch(params.uid, "(RFC822)", by_uid=True)
 
         if response[0] != "OK":
             raise IMAPMessageNotFoundError(f"MESSAGE_NOT_FOUND: UID {params.uid}")
 
         # Parse response
-        # Format can be: [(b'1 (UID 123 RFC822 {size}', b'email content'), b')']
-        # Or simpler mock format: [(header_bytes, content_bytes), close_paren]
+        # aioimaplib response[1] is a flat list:
+        #   [0] bytes     — metadata: "N FETCH (RFC822 {size}"
+        #   [1] bytearray — literal content (the full RFC822 message)
+        #   [2] bytes     — closing b')'
+        #   [3] bytes     — tagged OK line
         raw_data = response[1]
-        if not raw_data or len(raw_data) < 1:
+        if not raw_data or len(raw_data) < 2:
             raise IMAPMessageNotFoundError(f"MESSAGE_NOT_FOUND: UID {params.uid}")
 
-        # Extract email content
-        # If first element is a tuple, content is in the second part of the tuple
-        if isinstance(raw_data[0], tuple) and len(raw_data[0]) >= 2:
-            email_bytes = raw_data[0][1]
-        # Otherwise, might be the second element in the list
-        elif len(raw_data) >= 2 and isinstance(raw_data[1], bytes):
-            email_bytes = raw_data[1]
-        else:
-            raise IMAPMessageNotFoundError(f"MESSAGE_NOT_FOUND: UID {params.uid}")
+        email_bytes = raw_data[1]   # bytearray literal content
 
         if not email_bytes:
             raise IMAPMessageNotFoundError(f"MESSAGE_NOT_FOUND: UID {params.uid}")

@@ -65,7 +65,7 @@ async def test_acquire_connection_returns_connected_client(mock_settings):
 
 @pytest.mark.asyncio
 async def test_release_connection_returns_client_to_pool(mock_settings):
-    """Test that release_connection properly cleans up."""
+    """Test that release_connection calls logout; close() only when SELECTED."""
     from imap.client import IMAPPool
 
     mock_client = AsyncMock(spec=IMAP4_SSL)
@@ -78,9 +78,35 @@ async def test_release_connection_returns_client_to_pool(mock_settings):
 
     with patch("imap.client.IMAP4_SSL", return_value=mock_client):
         async with pool.acquire_connection() as client:
-            pass  # Exit context
+            pass  # Exit context — no SELECT issued, state is not SELECTED
 
-        # Verify logout and close were called
+        # logout must always be called
+        mock_client.logout.assert_called_once()
+        # close must NOT be called: after logout the state is LOGOUT, not SELECTED
+        mock_client.close.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_release_connection_calls_close_when_selected(mock_settings):
+    """Test that release_connection calls close() when a mailbox is selected."""
+    from imap.client import IMAPPool
+
+    mock_protocol = MagicMock()
+    mock_protocol.state = "SELECTED"
+
+    mock_client = AsyncMock(spec=IMAP4_SSL)
+    mock_client.wait_hello_from_server = AsyncMock()
+    mock_client.login = AsyncMock(return_value=("OK", [b"Logged in"]))
+    mock_client.logout = AsyncMock()
+    mock_client.close = AsyncMock()
+    mock_client.protocol = mock_protocol
+
+    pool = IMAPPool(pool_size=1)
+
+    with patch("imap.client.IMAP4_SSL", return_value=mock_client):
+        async with pool.acquire_connection() as client:
+            pass  # Exit with protocol.state == SELECTED
+
         mock_client.logout.assert_called_once()
         mock_client.close.assert_called_once()
 

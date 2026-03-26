@@ -98,10 +98,15 @@ class IMAPPool:
                         await client.logout()
                     except Exception as e:
                         logger.warning(f"Error during IMAP logout: {e}")
-                    try:
-                        await client.close()
-                    except Exception as e:
-                        logger.warning(f"Error closing IMAP connection: {e}")
+                    # CLOSE is only valid in SELECTED state; after logout the
+                    # state is LOGOUT so calling close() here raises
+                    # "command CLOSE illegal in state LOGOUT".
+                    if getattr(client, "protocol", None) and \
+                            getattr(client.protocol, "state", None) == "SELECTED":
+                        try:
+                            await client.close()
+                        except Exception as e:
+                            logger.warning(f"Error closing IMAP connection: {e}")
 
 
 # Global connection pool instance
