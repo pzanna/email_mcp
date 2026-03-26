@@ -130,6 +130,9 @@ async def test_search_emails_returns_message_summaries(mock_settings):
         assert hasattr(msg, "flagged")
         assert hasattr(msg, "has_attachments")
 
+        # Verify date is parsed to ISO 8601 format
+        assert msg.date == "2024-03-10T09:15:00+00:00"
+
 
 @pytest.mark.asyncio
 async def test_search_emails_handles_folder_not_found(mock_settings):

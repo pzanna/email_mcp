@@ -209,6 +209,8 @@ This is the email body.
         assert "charlie@example.com" in result.cc
         assert result.message_id == "<msg123@example.com>"
         assert result.in_reply_to == "<prev@example.com>"
+        # Verify date is parsed to ISO 8601 format
+        assert result.date == "2024-03-10T09:15:00+00:00"
 
 
 @pytest.mark.asyncio

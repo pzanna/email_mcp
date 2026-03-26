@@ -274,6 +274,39 @@ async def test_reply_email_saves_to_sent_folder(mock_settings):
 
 
 @pytest.mark.asyncio
+async def test_reply_email_sets_date_header(mock_settings):
+    """Test that reply_email sets a Date header so APPENDed replies have a date."""
+    from smtp.client import reply_email, ReplyEmailInput
+    from imap.read import ReadEmailResponse
+
+    original = ReadEmailResponse(
+        uid="123",
+        subject="Test",
+        from_email="alice@example.com",
+        to=["bob@example.com"],
+        cc=[],
+        date="Mon, 10 Mar 2024 09:15:00 +0000",
+        body_text="Body",
+        body_html="",
+        attachments=[],
+        message_id="<orig@example.com>",
+        in_reply_to=None
+    )
+
+    with patch("imap.read.read_email", new_callable=AsyncMock) as mock_read, \
+         patch("smtp.client.send_message", new_callable=AsyncMock) as mock_send, \
+         patch("smtp.client._save_to_sent", new_callable=AsyncMock):
+        mock_read.return_value = original
+        mock_send.return_value = "<reply@test.com>"
+
+        await reply_email(ReplyEmailInput(uid="123", body="Reply"))
+
+        msg = mock_send.call_args[0][0]
+        assert msg["Date"] is not None
+        assert msg["Date"] != ""
+
+
+@pytest.mark.asyncio
 async def test_reply_email_succeeds_even_if_save_to_sent_errors(mock_settings):
     """Test that reply_email succeeds even if _save_to_sent raises an exception."""
     from smtp.client import reply_email, ReplyEmailInput

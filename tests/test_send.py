@@ -215,7 +215,23 @@ async def test_send_email_does_not_fail_when_save_to_sent_errors(mock_settings):
 
 
 @pytest.mark.asyncio
-async def test_save_to_sent_appends_via_imap(mock_settings):
+async def test_send_email_sets_date_header(mock_settings):
+    """Test that send_email sets a Date header so APPENDed messages have a date."""
+    from smtp.client import send_email, SendEmailInput
+
+    with patch("smtp.client.send_message", new_callable=AsyncMock) as mock_send, \
+         patch("smtp.client._save_to_sent", new_callable=AsyncMock):
+        mock_send.return_value = "<msg123@test.com>"
+
+        await send_email(SendEmailInput(
+            to=["user@example.com"],
+            subject="Test",
+            body="Body"
+        ))
+
+        msg = mock_send.call_args[0][0]
+        assert msg["Date"] is not None
+        assert msg["Date"] != ""
     """Test that _save_to_sent discovers the Sent folder and calls IMAP APPEND."""
     from email.message import EmailMessage
     from smtp.client import _save_to_sent

@@ -4,12 +4,27 @@ import logging
 import re
 from datetime import datetime
 from email import message_from_bytes
+from email.utils import parsedate_to_datetime
 from typing import Optional
 from pydantic import BaseModel, Field, ConfigDict
 
 from imap.client import imap_pool
 
 logger = logging.getLogger(__name__)
+
+
+def _parse_date(raw: str) -> str:
+    """
+    Parse a raw RFC 2822 Date header value into an ISO 8601 string.
+
+    Returns empty string on any parse failure or missing header.
+    """
+    if not raw:
+        return ""
+    try:
+        return parsedate_to_datetime(raw).isoformat()
+    except Exception:
+        return ""
 
 
 class IMAPFolderNotFoundError(Exception):
@@ -183,7 +198,7 @@ async def search_emails(params: SearchEmailsInput) -> SearchEmailsResponse:
                     subject=msg.get("Subject", ""),
                     from_email=from_email,
                     to=to_list,
-                    date=msg.get("Date", ""),
+                    date=_parse_date(msg.get("Date") or msg.get("date") or ""),
                     unread="\\Seen" not in flags,
                     flagged="\\Flagged" in flags,
                     has_attachments=has_attachments,

@@ -3,7 +3,7 @@
 import logging
 import re
 from email.message import EmailMessage
-from email.utils import make_msgid
+from email.utils import make_msgid, formatdate
 from typing import Optional
 from pydantic import BaseModel, Field
 from aiosmtplib import SMTP
@@ -217,9 +217,11 @@ async def send_email(params: SendEmailInput) -> SendEmailResponse:
         msg["Bcc"] = ", ".join(params.bcc)
     msg["Subject"] = params.subject
 
-    # Generate Message-ID if not present
+    # Generate Message-ID and set Date if not present
     if "Message-ID" not in msg:
         msg["Message-ID"] = make_msgid()
+    if "Date" not in msg:
+        msg["Date"] = formatdate(localtime=True)
 
     # Set body
     if params.body_html:
@@ -320,8 +322,9 @@ async def reply_email(params: ReplyEmailInput) -> ReplyEmailResponse:
     if references:
         msg["References"] = " ".join(references)
 
-    # Generate Message-ID
+    # Generate Message-ID and set Date
     msg["Message-ID"] = make_msgid()
+    msg["Date"] = formatdate(localtime=True)
 
     # Set body
     if params.body_html:
