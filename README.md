@@ -215,7 +215,7 @@ Edit `.env`:
 
 ```bash
 MCP_HOST=0.0.0.0  # Allow remote connections
-MCP_BASE_URL=http://192.168.2.3:8420  # Your server IP
+MCP_BASE_URL=http://192.168.0.1:8420  # Your server IP
 ```
 
 1. **Install systemd service:**
@@ -252,7 +252,7 @@ Add to your MCP client configuration:
 }
 ```
 
-For remote server, use `http://192.168.2.3:8420/mcp` (replace with your server IP).
+For remote server, use `http://192.168.0.1:8420/mcp` (replace with your server IP).
 
 ## Architecture
 
