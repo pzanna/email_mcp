@@ -1,0 +1,125 @@
+{
+  "manifest_version": "0.4",
+  "name": "email-mcp",
+  "display_name": "Email MCP",
+  "version": "0.1.0",
+  "description": "Access your email via IMAP and SMTP — search, read, flag, move, send and reply to messages.",
+  "long_description": "Email MCP connects Claude to your email account over IMAP (reading) and SMTP (sending). All seven tools are available: list folders, search emails, read email, mark email, move email, send email, and reply to email. Credentials are collected once via the settings UI and stored securely in the OS keychain.",
+  "author": {
+    "name": "paulzanna"
+  },
+  "icon": "icon.png",
+  "license": "MIT",
+  "keywords": ["email", "imap", "smtp", "mail"],
+  "server": {
+    "type": "uv",
+    "entry_point": "mcp_server.py",
+    "mcp_config": {
+      "command": "uv",
+      "args": ["run", "--directory", "${__dirname}", "python", "mcp_server.py"],
+      "env": {
+        "IMAP_HOST":     "${user_config.imap_host}",
+        "IMAP_PORT":     "${user_config.imap_port}",
+        "IMAP_USER":     "${user_config.imap_user}",
+        "IMAP_PASSWORD": "${user_config.imap_password}",
+        "IMAP_SSL":      "${user_config.imap_ssl}",
+        "SMTP_HOST":     "${user_config.smtp_host}",
+        "SMTP_PORT":     "${user_config.smtp_port}",
+        "SMTP_USER":     "${user_config.smtp_user}",
+        "SMTP_PASSWORD": "${user_config.smtp_password}",
+        "SMTP_STARTTLS": "${user_config.smtp_starttls}"
+      }
+    }
+  },
+  "tools": [
+    { "name": "list_folders",  "description": "List all IMAP mailboxes/folders available on the account" },
+    { "name": "search_emails", "description": "Search for emails using IMAP criteria. Returns message summaries (no body content)." },
+    { "name": "read_email",    "description": "Fetch the full content of a message by UID, including body and attachment metadata." },
+    { "name": "mark_email",    "description": "Set or clear flags on a message (read/unread, flagged/unflagged)." },
+    { "name": "move_email",    "description": "Move a message from one folder to another." },
+    { "name": "send_email",    "description": "Compose and send a new email via SMTP." },
+    { "name": "reply_email",   "description": "Reply to an existing message, preserving thread headers." }
+  ],
+  "compatibility": {
+    "platforms": ["darwin", "linux"],
+    "runtimes": {
+      "python": ">=3.10"
+    }
+  },
+  "user_config": {
+    "imap_host": {
+      "type": "string",
+      "title": "IMAP Host",
+      "description": "IMAP server hostname (e.g. imap.gmail.com)",
+      "required": true,
+      "sensitive": true
+    },
+    "imap_port": {
+      "type": "string",
+      "title": "IMAP Port",
+      "description": "IMAP server port (993 for SSL, 143 for STARTTLS)",
+      "required": true,
+      "sensitive": true,
+      "default": "993"
+    },
+    "imap_user": {
+      "type": "string",
+      "title": "IMAP Username",
+      "description": "IMAP login username (usually your full email address)",
+      "required": true,
+      "sensitive": true
+    },
+    "imap_password": {
+      "type": "string",
+      "title": "IMAP Password",
+      "description": "IMAP password or app-specific password",
+      "required": true,
+      "sensitive": true
+    },
+    "imap_ssl": {
+      "type": "string",
+      "title": "IMAP SSL",
+      "description": "Use SSL/TLS for IMAP (true or false). Use true for port 993.",
+      "required": false,
+      "sensitive": true,
+      "default": "true"
+    },
+    "smtp_host": {
+      "type": "string",
+      "title": "SMTP Host",
+      "description": "SMTP server hostname (e.g. smtp.gmail.com)",
+      "required": true,
+      "sensitive": true
+    },
+    "smtp_port": {
+      "type": "string",
+      "title": "SMTP Port",
+      "description": "SMTP server port (587 for STARTTLS, 465 for SSL, 25 for plain)",
+      "required": true,
+      "sensitive": true,
+      "default": "587"
+    },
+    "smtp_user": {
+      "type": "string",
+      "title": "SMTP Username",
+      "description": "SMTP login username (usually your full email address)",
+      "required": true,
+      "sensitive": true
+    },
+    "smtp_password": {
+      "type": "string",
+      "title": "SMTP Password",
+      "description": "SMTP password or app-specific password",
+      "required": true,
+      "sensitive": true
+    },
+    "smtp_starttls": {
+      "type": "string",
+      "title": "SMTP STARTTLS",
+      "description": "STARTTLS mode: 'true' (always use), 'false' (never use), or 'none' (auto). Use 'true' for port 587.",
+      "required": false,
+      "sensitive": true,
+      "default": "true"
+    }
+  }
+}
