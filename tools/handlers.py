@@ -56,6 +56,11 @@ async def execute_tool(tool_name: str, arguments: dict[str, Any]) -> MCPToolCall
             input_data = DownloadAttachmentInput(**arguments)
             result = await download_attachment(input_data)
 
+        elif tool_name == "send_email_with_attachments":
+            from smtp.attachments import send_email_with_attachments, SendEmailWithAttachmentsInput
+            input_data = SendEmailWithAttachmentsInput(**arguments)
+            result = await send_email_with_attachments(input_data)
+
         else:
             # Return error in MCP format
             error_data = {

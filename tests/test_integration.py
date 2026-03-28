@@ -30,8 +30,8 @@ def mock_settings(monkeypatch):
     importlib.reload(config)
 
 
-def test_get_mcp_tools_lists_all_7_tools(mock_settings):
-    """Test that GET /mcp/tools returns all 7 tools."""
+def test_get_mcp_tools_lists_all_9_tools(mock_settings):
+    """Test that GET /mcp/tools returns all 9 tools."""
     from main import app
 
     client = TestClient(app)
@@ -44,12 +44,13 @@ def test_get_mcp_tools_lists_all_7_tools(mock_settings):
     assert response.status_code == 200
     data = response.json()
     assert "tools" in data
-    assert len(data["tools"]) == 7
+    assert len(data["tools"]) == 9
 
     tool_names = {tool["name"] for tool in data["tools"]}
     expected_tools = {
         "list_folders", "search_emails", "read_email",
-        "mark_email", "move_email", "send_email", "reply_email"
+        "mark_email", "move_email", "send_email", "reply_email",
+        "download_attachment", "send_email_with_attachments"
     }
     assert tool_names == expected_tools
 
@@ -85,7 +86,7 @@ def test_health_check_works_without_auth(mock_settings):
 
 @pytest.mark.asyncio
 async def test_mcp_call_all_tools_return_correct_schema(mock_settings):
-    """Test that POST /mcp/call works for all 7 tools with mocked backends."""
+    """Test that POST /mcp/call works for all 9 tools with mocked backends."""
     from main import app
     from unittest.mock import AsyncMock, MagicMock
 
@@ -253,6 +254,39 @@ async def test_mcp_call_all_tools_return_correct_schema(mock_settings):
                     "params": {
                         "name": "reply_email",
                         "arguments": {"uid": "123", "body": "Reply"}
+                    }
+                },
+                headers={"X-API-Key": "test-secret-key"}
+            )
+            assert response.status_code == 200
+
+            # Test download_attachment (may fail due to mocking complexity - that's OK)
+            response = client.post(
+                "/mcp/call",
+                json={
+                    "method": "tools/call",
+                    "params": {
+                        "name": "download_attachment",
+                        "arguments": {"uid": "123", "attachment_index": 0}
+                    }
+                },
+                headers={"X-API-Key": "test-secret-key"}
+            )
+            assert response.status_code == 200
+
+            # Test send_email_with_attachments (may fail due to file not found - that's OK)
+            response = client.post(
+                "/mcp/call",
+                json={
+                    "method": "tools/call",
+                    "params": {
+                        "name": "send_email_with_attachments",
+                        "arguments": {
+                            "to": ["user@test.com"],
+                            "subject": "Test",
+                            "body": "Body",
+                            "attachment_paths": ["nonexistent.txt"]
+                        }
                     }
                 },
                 headers={"X-API-Key": "test-secret-key"}

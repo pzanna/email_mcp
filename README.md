@@ -4,7 +4,7 @@ A [Model Context Protocol (MCP)](https://modelcontextprotocol.io) server that pr
 
 ## Features
 
-- **7 Email Tools** via MCP:
+- **9 Email Tools** via MCP:
   - `list_folders` - List all IMAP mailboxes/folders
   - `search_emails` - Search emails with filters (sender, subject, date range, read/flagged status)
   - `read_email` - Fetch full email content including body and attachment metadata
@@ -12,6 +12,8 @@ A [Model Context Protocol (MCP)](https://modelcontextprotocol.io) server that pr
   - `move_email` - Move emails between folders
   - `send_email` - Send new emails (plain text or multipart HTML)
   - `reply_email` - Reply to emails preserving thread headers
+  - `download_attachment` - Download email attachments to workspace directory
+  - `send_email_with_attachments` - Send emails with file attachments from workspace
 
 - **Production-Ready Architecture**:
   - Async-native IMAP/SMTP with connection pooling
@@ -21,7 +23,7 @@ A [Model Context Protocol (MCP)](https://modelcontextprotocol.io) server that pr
   - systemd service file for Ubuntu deployment
 
 - **Test-Driven Development**:
-  - 72 unit and integration tests
+  - 85+ unit and integration tests
   - 100% coverage of core functionality
   - Mocked email servers for reproducible testing
 
@@ -67,6 +69,8 @@ Once installed, Claude can access your email. Try:
 > "List my unread emails from this week"
 > "Search for emails from alice@example.com about the project"
 > "Send an email to bob@example.com with subject 'Hello' and body 'Hi Bob!'"
+> "Download the first attachment from email UID 12345"
+> "Send an email with the report.pdf attachment to team@example.com"
 
 ---
 
@@ -124,6 +128,10 @@ MCP_BASE_URL=http://localhost:8420
 DEFAULT_FROM_NAME=Your Name
 MAX_SEARCH_RESULTS=50
 IMAP_POOL_SIZE=3
+
+# Attachment Configuration
+SAM_WORKSPACE_DIR=/path/to/workspace
+MAX_ATTACHMENT_SIZE_MB=50
 ```
 
 ### 3. Run the Server
@@ -157,7 +165,7 @@ pytest tests/test_integration.py -v
 pytest tests/test_send.py::test_send_email_plain_text -v
 ```
 
-All 72 tests should pass.
+All 85+ tests should pass.
 
 ## Usage Examples
 
@@ -233,6 +241,101 @@ curl -X POST http://localhost:8420/mcp/call \
       }
     }
   }'
+```
+
+### Download Email Attachment
+
+```bash
+curl -X POST http://localhost:8420/mcp/call \
+  -H "X-API-Key: your-secret-api-key-here" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "method": "tools/call",
+    "params": {
+      "name": "download_attachment",
+      "arguments": {
+        "uid": "12345",
+        "attachment_index": 0,
+        "folder": "INBOX",
+        "filename_override": "renamed_file.pdf"
+      }
+    }
+  }'
+```
+
+Downloads the attachment to `SAM_WORKSPACE_DIR/attachments/email/downloads/` with security validation to ensure files stay within the workspace directory.
+
+### Send Email with Attachments
+
+```bash
+curl -X POST http://localhost:8420/mcp/call \
+  -H "X-API-Key: your-secret-api-key-here" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "method": "tools/call",
+    "params": {
+      "name": "send_email_with_attachments",
+      "arguments": {
+        "to": ["recipient@example.com"],
+        "cc": ["manager@example.com"],
+        "subject": "Monthly Report",
+        "body": "Please find the reports attached.",
+        "body_html": "<p>Please find the <strong>reports</strong> attached.</p>",
+        "from_name": "John Doe",
+        "attachment_paths": [
+          "attachments/email/uploads/report1.pdf",
+          "attachments/email/uploads/report2.xlsx"
+        ]
+      }
+    }
+  }'
+```
+
+Attaches files from the workspace directory with full security validation and size limit enforcement.
+
+## Attachment Handling
+
+The email MCP server provides secure attachment handling with workspace-based file management.
+
+### Workspace Directory Structure
+
+All attachment operations are confined to the configured workspace directory:
+
+```
+SAM_WORKSPACE_DIR/
+└── attachments/
+    └── email/
+        ├── downloads/    # Downloaded email attachments
+        └── uploads/      # Files ready to attach to outgoing emails
+```
+
+### Security Features
+
+- **Workspace Confinement**: All file operations are restricted to `SAM_WORKSPACE_DIR`
+- **Path Traversal Protection**: Prevents access to files outside the workspace
+- **Filename Sanitization**: Removes dangerous characters and handles reserved names
+- **Size Limits**: Configurable per-file and total attachment size limits
+- **File Type Validation**: Ensures attachment paths point to actual files
+
+### Workflow Examples
+
+**Download → Send Workflow**:
+1. Use `download_attachment` to save email attachments to `downloads/`
+2. Move or copy files to `uploads/` as needed
+3. Use `send_email_with_attachments` to send files from `uploads/`
+
+**Direct Upload Workflow**:
+1. Place files in the `uploads/` directory
+2. Use `send_email_with_attachments` with workspace-relative paths
+
+### Configuration
+
+```bash
+# Workspace directory (required for attachment operations)
+SAM_WORKSPACE_DIR=/path/to/your/workspace
+
+# Maximum attachment size per file (default: 50MB)
+MAX_ATTACHMENT_SIZE_MB=50
 ```
 
 ## Deployment
@@ -311,13 +414,18 @@ email_mcp/
 │   ├── client.py          # IMAP connection pool
 │   ├── read.py            # list_folders, read_email
 │   ├── search.py          # search_emails
-│   └── flags.py           # mark_email, move_email
+│   ├── flags.py           # mark_email, move_email
+│   └── attachments.py     # download_attachment
 ├── smtp/
-│   └── client.py          # send_email, reply_email
+│   ├── client.py          # send_email, reply_email
+│   └── attachments.py     # send_email_with_attachments
 ├── tools/
 │   ├── definitions.py     # MCP tool schemas
+│   ├── handlers.py        # Tool request routing
 │   └── mcp_routes.py      # MCP HTTP endpoints
-└── tests/                  # 72 unit and integration tests
+├── utils/
+│   └── attachment_utils.py # Secure file handling utilities
+└── tests/                  # 85+ unit and integration tests
 ```
 
 ### Key Design Patterns

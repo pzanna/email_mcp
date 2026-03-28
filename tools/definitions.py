@@ -233,5 +233,53 @@ TOOL_SCHEMAS = [
             },
             "required": ["uid", "attachment_index"]
         }
+    },
+    {
+        "name": "send_email_with_attachments",
+        "description": "Compose and send an email with file attachments via SMTP. Attachment paths must be within the workspace directory for security.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "to": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Recipient email addresses"
+                },
+                "cc": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "CC recipients",
+                    "default": []
+                },
+                "bcc": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "BCC recipients",
+                    "default": []
+                },
+                "subject": {
+                    "type": "string",
+                    "description": "Email subject"
+                },
+                "body": {
+                    "type": "string",
+                    "description": "Plain text body"
+                },
+                "body_html": {
+                    "type": "string",
+                    "description": "HTML body (optional, creates multipart if provided)"
+                },
+                "from_name": {
+                    "type": "string",
+                    "description": "Sender name (overrides DEFAULT_FROM_NAME)"
+                },
+                "attachment_paths": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Paths to files to attach (workspace-relative or absolute, must be within workspace)"
+                }
+            },
+            "required": ["to", "subject", "body", "attachment_paths"]
+        }
     }
 ]
