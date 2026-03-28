@@ -200,9 +200,20 @@ async def read_email(params: ReadEmailInput) -> ReadEmailResponse:
                 content_type = part.get_content_type()
                 content_disposition = part.get("Content-Disposition", "")
 
-                # Check if it's an attachment
-                if "attachment" in content_disposition:
-                    filename = part.get_filename() or "unnamed"
+                # Check if it's an attachment - improved logic
+                # Accept multiple indicators: explicit attachment/inline disposition,
+                # presence of filename, or binary content types
+                filename = part.get_filename()
+                is_attachment = (
+                    "attachment" in content_disposition or
+                    "inline" in content_disposition or
+                    filename is not None or
+                    (content_type.startswith(("application/", "image/", "audio/", "video/")) and
+                     not content_type.startswith("multipart/"))
+                )
+
+                if is_attachment and content_type not in ["text/plain", "text/html"]:
+                    filename = filename or "unnamed"
                     payload = part.get_payload(decode=True)
                     size_bytes = len(payload) if payload else 0
 
