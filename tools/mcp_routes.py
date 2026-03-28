@@ -8,6 +8,23 @@ import json
 from auth import verify_api_key
 from tools.definitions import TOOL_SCHEMAS
 
+# Attachment-specific exceptions
+class AttachmentError(Exception):
+    """Base exception for attachment operations."""
+    pass
+
+class AttachmentNotFoundError(AttachmentError):
+    """Raised when attachment index is invalid or attachment not found."""
+    pass
+
+class AttachmentTooLargeError(AttachmentError):
+    """Raised when attachment exceeds size limits."""
+    pass
+
+class InvalidAttachmentPathError(AttachmentError):
+    """Raised when attachment path is invalid or outside workspace."""
+    pass
+
 router = APIRouter(prefix="/mcp", dependencies=[Depends(verify_api_key)])
 
 
@@ -28,7 +45,7 @@ class MCPContentItem(BaseModel):
 class MCPToolCallResponse(BaseModel):
     """MCP tools/call response format."""
     content: list[MCPContentItem]
-    isError: Optional[bool] = None
+    isError: bool = False
 
 
 @router.get("/tools")
