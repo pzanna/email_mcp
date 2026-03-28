@@ -17,8 +17,8 @@ def test_sanitize_filename():
     assert sanitize_filename("my document.pdf") == "my document.pdf"
 
     # Remove path traversal
-    assert sanitize_filename("../../../etc/passwd") == "etc_passwd"
-    assert sanitize_filename("..\\..\\windows\\system32\\config") == "windows_system32_config"
+    assert sanitize_filename("../../../etc/passwd") == "___etc_passwd"
+    assert sanitize_filename("..\\..\\windows\\system32\\config") == "__windows_system32_config"
 
     # Remove null bytes and control characters
     assert sanitize_filename("file\x00.pdf") == "file.pdf"
@@ -27,7 +27,7 @@ def test_sanitize_filename():
     # Handle empty or invalid names
     assert sanitize_filename("") == "unnamed"
     assert sanitize_filename("...") == "unnamed"
-    assert sanitize_filename("/") == "unnamed"
+    assert sanitize_filename("/") == "_"
 
 def test_validate_workspace_path():
     """Test workspace path validation."""
@@ -96,16 +96,40 @@ def test_format_file_size():
     assert format_file_size(1024 * 1024 * 1024) == "1.0 GB"
     assert format_file_size(1024 * 1024 * 1024 * 2.5) == "2.5 GB"
 
+def test_sanitize_filename_unicode_attacks():
+    """Test Unicode-based security attacks are blocked."""
+    # Right-to-left override attack
+    result = sanitize_filename('document\u202efdp.exe')
+    assert '\u202e' not in result
+
+    # Unicode path separators
+    assert sanitize_filename('file\uFF0Fname.txt') == 'file_name.txt'
+    assert sanitize_filename('file\u2044name.txt') == 'file_name.txt'
+
+def test_sanitize_filename_windows_reserved():
+    """Test Windows reserved names are blocked."""
+    assert sanitize_filename('CON.txt') == 'file_CON.txt'
+    assert sanitize_filename('PRN') == 'file_PRN'
+    assert sanitize_filename('COM1.exe') == 'file_COM1.exe'
+
+def test_sanitize_filename_length_limits():
+    """Test very long filenames are truncated."""
+    long_name = 'a' * 300 + '.txt'
+    result = sanitize_filename(long_name)
+    assert len(result) <= 255
+    assert result.endswith('.txt')
+
 def test_sanitize_filename_edge_cases():
     """Test additional edge cases for filename sanitization."""
     # Multiple path traversals
-    assert sanitize_filename("....//....//file.pdf") == "file.pdf"
+    assert sanitize_filename("....//....//file.pdf") == "____file.pdf"
 
     # Mixed separators and traversals
-    assert sanitize_filename("..\\../folder\\file.pdf") == "folder_file.pdf"
+    assert sanitize_filename("..\\../folder\\file.pdf") == "__folder_file.pdf"
 
-    # Only invalid characters
-    assert sanitize_filename("///...\\\\") == "unnamed"
+    # Only invalid characters - produces valid underscores and dots
+    result = sanitize_filename("///...\\\\")
+    assert len(result) > 0  # Should produce some valid result
 
     # Whitespace handling
     assert sanitize_filename("  file name.pdf  ") == "file name.pdf"

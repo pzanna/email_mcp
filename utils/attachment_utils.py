@@ -22,20 +22,30 @@ def sanitize_filename(filename: str) -> str:
     if not filename or not filename.strip():
         return "unnamed"
 
-    # Remove path traversal patterns completely
-    filename = re.sub(r'\.\.+[/\\]*', '', filename)
-
-    # Remove path separators
+    # Remove path separators and traversal attempts
     filename = filename.replace('/', '_').replace('\\', '_')
+    filename = filename.replace('..', '')
 
-    # Remove null bytes and control characters
+    # Remove null bytes and ASCII control characters
     filename = re.sub(r'[\x00-\x1f\x7f-\x9f]', '', filename)
 
-    # Remove leading/trailing dots, spaces and underscores
-    filename = filename.strip('. _')
+    # SECURITY FIX 1: Remove Unicode control characters and alternative path separators
+    filename = re.sub(r'[\u0080-\u009F\u200B-\u200F\u202A-\u202E\u2060-\u206F]', '', filename)  # Unicode control chars
+    filename = re.sub(r'[\uFF0F\u2044]', '_', filename)  # Unicode path separators
 
-    # Collapse multiple underscores
-    filename = re.sub(r'_+', '_', filename)
+    # Remove leading/trailing dots and spaces
+    filename = filename.strip('. ')
+
+    # SECURITY FIX 2: Windows reserved names protection
+    windows_reserved = ['CON', 'PRN', 'AUX', 'NUL'] + [f'COM{i}' for i in range(1, 10)] + [f'LPT{i}' for i in range(1, 10)]
+    if filename.upper().split('.')[0] in windows_reserved:
+        filename = f"file_{filename}"
+
+    # SECURITY FIX 3: Filename length limits
+    if len(filename) > 255:  # Most filesystems limit to 255 chars
+        name, ext = filename.rsplit('.', 1) if '.' in filename else (filename, '')
+        max_name_len = 250 if ext else 255
+        filename = name[:max_name_len] + ('.' + ext if ext else '')
 
     # If nothing left, use default
     if not filename:
