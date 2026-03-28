@@ -4,6 +4,7 @@ All configuration is loaded from environment variables via .env file.
 """
 
 from typing import Literal
+from pathlib import Path
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -48,6 +49,30 @@ class Settings(BaseSettings):
     IMAP_POOL_SIZE: int = Field(
         default=3, description="Maximum number of concurrent IMAP connections"
     )
+
+    # Attachment handling
+    SAM_WORKSPACE_DIR: str = Field(default=".", description="Sam workspace directory for attachment storage")
+    MAX_ATTACHMENT_SIZE_MB: int = Field(default=50, description="Maximum attachment size in MB")
+
+    @property
+    def attachment_base_dir(self) -> Path:
+        """Base directory for email attachments within workspace."""
+        return Path(self.SAM_WORKSPACE_DIR) / "attachments" / "email"
+
+    @property
+    def download_dir(self) -> Path:
+        """Directory for downloaded email attachments."""
+        return self.attachment_base_dir / "downloads"
+
+    @property
+    def upload_dir(self) -> Path:
+        """Directory for files to attach to outgoing emails."""
+        return self.attachment_base_dir / "uploads"
+
+    @property
+    def max_attachment_size_bytes(self) -> int:
+        """Maximum attachment size in bytes."""
+        return self.MAX_ATTACHMENT_SIZE_MB * 1024 * 1024
 
     @field_validator("SMTP_STARTTLS", mode="before")
     @classmethod
