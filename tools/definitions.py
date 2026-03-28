@@ -206,5 +206,32 @@ TOOL_SCHEMAS = [
             },
             "required": ["uid", "body"]
         }
+    },
+    {
+        "name": "download_attachment",
+        "description": "Download an email attachment to the workspace directory",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "uid": {
+                    "type": "string",
+                    "description": "UID of email containing attachment"
+                },
+                "folder": {
+                    "type": "string",
+                    "description": "Folder containing the email",
+                    "default": "INBOX"
+                },
+                "attachment_index": {
+                    "type": "integer",
+                    "description": "Zero-based index of attachment to download"
+                },
+                "filename_override": {
+                    "type": "string",
+                    "description": "Override filename (will be sanitized)"
+                }
+            },
+            "required": ["uid", "attachment_index"]
+        }
     }
 ]
