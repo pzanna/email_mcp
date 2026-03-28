@@ -100,9 +100,20 @@ async def download_attachment(params: DownloadAttachmentInput) -> DownloadAttach
         current_attachment_index = 0
 
         for part in msg.walk():
+            content_type = part.get_content_type()
             content_disposition = part.get("Content-Disposition", "")
+            filename = part.get_filename()
 
-            if "attachment" in content_disposition:
+            # Use the same improved attachment detection logic as read_email
+            is_attachment = (
+                "attachment" in content_disposition or
+                "inline" in content_disposition or
+                filename is not None or
+                (content_type.startswith(("application/", "image/", "audio/", "video/")) and
+                 not content_type.startswith("multipart/"))
+            )
+
+            if is_attachment and content_type not in ["text/plain", "text/html"]:
                 if current_attachment_index == params.attachment_index:
                     attachment_content = part.get_payload(decode=True)
                     break
@@ -129,7 +140,7 @@ async def download_attachment(params: DownloadAttachmentInput) -> DownloadAttach
     file_path.write_bytes(attachment_content)
 
     # Create workspace-relative path
-    workspace_relative_path = str(file_path.relative_to(Path(settings.SAM_WORKSPACE_DIR)))
+    workspace_relative_path = str(file_path.relative_to(Path(settings.EMAIL_BASE_DIR)))
 
     logger.info(f"Downloaded attachment: {unique_filename} ({len(attachment_content)} bytes)")
 
