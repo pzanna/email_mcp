@@ -130,7 +130,7 @@ MAX_SEARCH_RESULTS=50
 IMAP_POOL_SIZE=3
 
 # Attachment Configuration
-SAM_WORKSPACE_DIR=/path/to/workspace
+EMAIL_BASE_DIR=/path/to/workspace
 MAX_ATTACHMENT_SIZE_MB=50
 ```
 
@@ -263,7 +263,7 @@ curl -X POST http://localhost:8420/mcp/call \
   }'
 ```
 
-Downloads the attachment to `SAM_WORKSPACE_DIR/attachments/email/downloads/` with security validation to ensure files stay within the workspace directory.
+Downloads the attachment to `EMAIL_BASE_DIR/attachments/email/downloads/` with security validation to ensure files stay within the base directory.
 
 ### Send Email with Attachments
 
@@ -302,7 +302,7 @@ The email MCP server provides secure attachment handling with workspace-based fi
 All attachment operations are confined to the configured workspace directory:
 
 ```
-SAM_WORKSPACE_DIR/
+EMAIL_BASE_DIR/
 └── attachments/
     └── email/
         ├── downloads/    # Downloaded email attachments
@@ -311,7 +311,7 @@ SAM_WORKSPACE_DIR/
 
 ### Security Features
 
-- **Workspace Confinement**: All file operations are restricted to `SAM_WORKSPACE_DIR`
+- **Workspace Confinement**: All file operations are restricted to `EMAIL_BASE_DIR`
 - **Path Traversal Protection**: Prevents access to files outside the workspace
 - **Filename Sanitization**: Removes dangerous characters and handles reserved names
 - **Size Limits**: Configurable per-file and total attachment size limits
@@ -332,7 +332,7 @@ SAM_WORKSPACE_DIR/
 
 ```bash
 # Workspace directory (required for attachment operations)
-SAM_WORKSPACE_DIR=/path/to/your/workspace
+EMAIL_BASE_DIR=/path/to/your/workspace
 
 # Maximum attachment size per file (default: 50MB)
 MAX_ATTACHMENT_SIZE_MB=50

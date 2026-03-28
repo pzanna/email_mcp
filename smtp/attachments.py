@@ -65,7 +65,7 @@ async def send_email_with_attachments(params: SendEmailWithAttachmentsInput) -> 
 
     for attachment_path in params.attachment_paths:
         # Validate path is within workspace
-        validated_path = validate_workspace_path(attachment_path, settings.SAM_WORKSPACE_DIR)
+        validated_path = validate_workspace_path(attachment_path, settings.EMAIL_BASE_DIR)
 
         # Check file exists
         if not validated_path.exists():
@@ -99,7 +99,7 @@ async def send_email_with_attachments(params: SendEmailWithAttachmentsInput) -> 
             )
 
         attachments_info.append(AttachmentInfo(
-            file_path=str(validated_path.relative_to(Path(settings.SAM_WORKSPACE_DIR))),
+            file_path=str(validated_path.relative_to(Path(settings.EMAIL_BASE_DIR))),
             filename=filename,
             content_type=content_type,
             size_bytes=size_bytes
@@ -137,7 +137,7 @@ async def send_email_with_attachments(params: SendEmailWithAttachmentsInput) -> 
 
     # Add attachments
     for attachment_info in attachments_info:
-        attachment_path = Path(settings.SAM_WORKSPACE_DIR) / attachment_info.file_path
+        attachment_path = Path(settings.EMAIL_BASE_DIR) / attachment_info.file_path
 
         # Read file content
         with open(attachment_path, 'rb') as f:

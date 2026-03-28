@@ -32,7 +32,7 @@ async def test_download_attachment_success():
 
     with tempfile.TemporaryDirectory() as temp_workspace:
         with patch('imap.attachments.settings') as mock_settings:
-            mock_settings.SAM_WORKSPACE_DIR = temp_workspace
+            mock_settings.EMAIL_BASE_DIR = temp_workspace
             mock_settings.max_attachment_size_bytes = 100 * 1024 * 1024  # 100MB
             mock_settings.download_dir = Path(temp_workspace) / "attachments" / "email" / "downloads"
 
@@ -115,7 +115,7 @@ async def test_download_attachment_not_found():
 
         with tempfile.TemporaryDirectory() as temp_workspace:
             with patch('imap.attachments.settings') as mock_settings:
-                mock_settings.SAM_WORKSPACE_DIR = temp_workspace
+                mock_settings.EMAIL_BASE_DIR = temp_workspace
                 mock_settings.download_dir = Path(temp_workspace) / "attachments" / "email" / "downloads"
 
                 params = DownloadAttachmentInput(uid="123", folder="INBOX", attachment_index=0)
@@ -153,7 +153,7 @@ async def test_download_attachment_too_large():
 
         with tempfile.TemporaryDirectory() as temp_workspace:
             with patch('imap.attachments.settings') as mock_settings:
-                mock_settings.SAM_WORKSPACE_DIR = temp_workspace
+                mock_settings.EMAIL_BASE_DIR = temp_workspace
                 mock_settings.max_attachment_size_bytes = 100 * 1024 * 1024  # 100MB limit
                 mock_settings.MAX_ATTACHMENT_SIZE_MB = 100
                 mock_settings.download_dir = Path(temp_workspace) / "attachments" / "email" / "downloads"
@@ -183,7 +183,7 @@ async def test_download_attachment_sanitized_filename():
 
     with tempfile.TemporaryDirectory() as temp_workspace:
         with patch('imap.attachments.settings') as mock_settings:
-            mock_settings.SAM_WORKSPACE_DIR = temp_workspace
+            mock_settings.EMAIL_BASE_DIR = temp_workspace
             mock_settings.max_attachment_size_bytes = 100 * 1024 * 1024  # 100MB
             mock_settings.download_dir = Path(temp_workspace) / "attachments" / "email" / "downloads"
 
@@ -260,7 +260,7 @@ async def test_download_attachment_filename_override():
 
     with tempfile.TemporaryDirectory() as temp_workspace:
         with patch('imap.attachments.settings') as mock_settings:
-            mock_settings.SAM_WORKSPACE_DIR = temp_workspace
+            mock_settings.EMAIL_BASE_DIR = temp_workspace
             mock_settings.max_attachment_size_bytes = 100 * 1024 * 1024  # 100MB
             mock_settings.download_dir = Path(temp_workspace) / "attachments" / "email" / "downloads"
 

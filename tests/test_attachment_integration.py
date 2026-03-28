@@ -46,7 +46,7 @@ def mock_settings_with_workspace(monkeypatch, mock_workspace):
     monkeypatch.setenv("MCP_PORT", "8420")
 
     # Set workspace directory
-    monkeypatch.setenv("SAM_WORKSPACE_DIR", mock_workspace)
+    monkeypatch.setenv("EMAIL_BASE_DIR", mock_workspace)
     monkeypatch.setenv("MAX_ATTACHMENT_SIZE_MB", "50")
 
     import importlib
@@ -83,7 +83,7 @@ def test_workspace_directory_structure_creation(mock_settings_with_workspace):
     """Test that workspace directory structure is created correctly."""
     from config import settings
 
-    workspace = Path(settings.SAM_WORKSPACE_DIR)
+    workspace = Path(settings.EMAIL_BASE_DIR)
 
     # Test basic workspace directory exists
     assert workspace.exists()
@@ -301,8 +301,8 @@ async def test_security_validation_across_both_tools(mock_settings_with_workspac
             pytest.skip("Download failed due to IMAP mocking complexity")
 
         assert download_result["success"]
-        downloaded_path = Path(settings.SAM_WORKSPACE_DIR) / download_result["file_path"]
-        assert downloaded_path.is_relative_to(Path(settings.SAM_WORKSPACE_DIR))
+        downloaded_path = Path(settings.EMAIL_BASE_DIR) / download_result["file_path"]
+        assert downloaded_path.is_relative_to(Path(settings.EMAIL_BASE_DIR))
 
         # Test 2: Cannot send attachments outside workspace
         with patch("smtp.attachments.send_message", new_callable=AsyncMock):
@@ -341,7 +341,7 @@ def test_file_utility_functions_integration(mock_settings_with_workspace):
     )
     from config import settings
 
-    workspace = Path(settings.SAM_WORKSPACE_DIR)
+    workspace = Path(settings.EMAIL_BASE_DIR)
 
     # Test sanitize_filename with dangerous inputs
     assert sanitize_filename("../../etc/passwd") == "__etc_passwd"  # Updated expected value
@@ -522,7 +522,7 @@ async def test_attachment_size_limits_enforcement(mock_settings_with_workspace):
                     "to": ["test@test.com"],
                     "subject": "Test with normal file",
                     "body": "This should work",
-                    "attachment_paths": [str(test_file.relative_to(Path(settings.SAM_WORKSPACE_DIR)))]
+                    "attachment_paths": [str(test_file.relative_to(Path(settings.EMAIL_BASE_DIR)))]
                 }
             }
         },
@@ -574,7 +574,7 @@ async def test_multipart_email_with_attachments_integration(mock_settings_with_w
                         "body": "Please find the monthly report attached.",
                         "body_html": "<p>Please find the <strong>monthly report</strong> attached.</p>",
                         "from_name": "John Doe",
-                        "attachment_paths": [str(test_file.relative_to(Path(settings.SAM_WORKSPACE_DIR)))]
+                        "attachment_paths": [str(test_file.relative_to(Path(settings.EMAIL_BASE_DIR)))]
                     }
                 }
             },

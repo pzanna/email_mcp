@@ -53,7 +53,7 @@ async def test_send_email_with_attachments_success(mock_settings):
         test_file2.write_bytes(b"PDF content here")
 
         with patch('smtp.attachments.settings') as mock_settings_obj:
-            mock_settings_obj.SAM_WORKSPACE_DIR = temp_workspace
+            mock_settings_obj.EMAIL_BASE_DIR = temp_workspace
             mock_settings_obj.SMTP_USER = "test@test.com"
             mock_settings_obj.DEFAULT_FROM_NAME = "Test User"
             mock_settings_obj.max_attachment_size_bytes = 100 * 1024 * 1024  # 100MB
@@ -107,7 +107,7 @@ async def test_send_email_with_attachments_multipart_html(mock_settings):
         test_file.write_text("Attachment content")
 
         with patch('smtp.attachments.settings') as mock_settings_obj:
-            mock_settings_obj.SAM_WORKSPACE_DIR = temp_workspace
+            mock_settings_obj.EMAIL_BASE_DIR = temp_workspace
             mock_settings_obj.SMTP_USER = "test@test.com"
             mock_settings_obj.DEFAULT_FROM_NAME = "Test User"
             mock_settings_obj.max_attachment_size_bytes = 100 * 1024 * 1024
@@ -139,7 +139,7 @@ async def test_send_email_with_attachments_multiple_recipients(mock_settings):
         test_file.write_text("Content")
 
         with patch('smtp.attachments.settings') as mock_settings_obj:
-            mock_settings_obj.SAM_WORKSPACE_DIR = temp_workspace
+            mock_settings_obj.EMAIL_BASE_DIR = temp_workspace
             mock_settings_obj.SMTP_USER = "test@test.com"
             mock_settings_obj.DEFAULT_FROM_NAME = "Test User"
             mock_settings_obj.max_attachment_size_bytes = 100 * 1024 * 1024
@@ -175,7 +175,7 @@ async def test_send_email_with_attachments_custom_from_name(mock_settings):
         test_file.write_text("Content")
 
         with patch('smtp.attachments.settings') as mock_settings_obj:
-            mock_settings_obj.SAM_WORKSPACE_DIR = temp_workspace
+            mock_settings_obj.EMAIL_BASE_DIR = temp_workspace
             mock_settings_obj.SMTP_USER = "test@test.com"
             mock_settings_obj.DEFAULT_FROM_NAME = "Test User"
             mock_settings_obj.max_attachment_size_bytes = 100 * 1024 * 1024
@@ -207,7 +207,7 @@ async def test_send_email_with_attachments_absolute_path(mock_settings):
         test_file.write_text("Content")
 
         with patch('smtp.attachments.settings') as mock_settings_obj:
-            mock_settings_obj.SAM_WORKSPACE_DIR = temp_workspace
+            mock_settings_obj.EMAIL_BASE_DIR = temp_workspace
             mock_settings_obj.SMTP_USER = "test@test.com"
             mock_settings_obj.DEFAULT_FROM_NAME = "Test User"
             mock_settings_obj.max_attachment_size_bytes = 100 * 1024 * 1024
@@ -240,7 +240,7 @@ async def test_send_email_with_attachments_path_outside_workspace(mock_settings)
             outside_file.write_text("Outside content")
 
             with patch('smtp.attachments.settings') as mock_settings_obj:
-                mock_settings_obj.SAM_WORKSPACE_DIR = temp_workspace
+                mock_settings_obj.EMAIL_BASE_DIR = temp_workspace
                 mock_settings_obj.max_attachment_size_bytes = 100 * 1024 * 1024
 
                 params = SendEmailWithAttachmentsInput(
@@ -259,7 +259,7 @@ async def test_send_email_with_attachments_file_not_found(mock_settings):
     """Test error handling for missing attachment files."""
     with tempfile.TemporaryDirectory() as temp_workspace:
         with patch('smtp.attachments.settings') as mock_settings_obj:
-            mock_settings_obj.SAM_WORKSPACE_DIR = temp_workspace
+            mock_settings_obj.EMAIL_BASE_DIR = temp_workspace
             mock_settings_obj.max_attachment_size_bytes = 100 * 1024 * 1024
 
             params = SendEmailWithAttachmentsInput(
@@ -282,7 +282,7 @@ async def test_send_email_with_attachments_directory_path(mock_settings):
         subdir.mkdir()
 
         with patch('smtp.attachments.settings') as mock_settings_obj:
-            mock_settings_obj.SAM_WORKSPACE_DIR = temp_workspace
+            mock_settings_obj.EMAIL_BASE_DIR = temp_workspace
             mock_settings_obj.max_attachment_size_bytes = 100 * 1024 * 1024
 
             params = SendEmailWithAttachmentsInput(
@@ -306,7 +306,7 @@ async def test_send_email_with_attachments_file_too_large(mock_settings):
         large_file.write_text(large_content)
 
         with patch('smtp.attachments.settings') as mock_settings_obj:
-            mock_settings_obj.SAM_WORKSPACE_DIR = temp_workspace
+            mock_settings_obj.EMAIL_BASE_DIR = temp_workspace
             mock_settings_obj.max_attachment_size_bytes = 50 * 1024 * 1024  # 50MB limit
             mock_settings_obj.MAX_ATTACHMENT_SIZE_MB = 50
 
@@ -335,7 +335,7 @@ async def test_send_email_with_attachments_total_size_too_large(mock_settings):
         file2.write_text(file_content)
 
         with patch('smtp.attachments.settings') as mock_settings_obj:
-            mock_settings_obj.SAM_WORKSPACE_DIR = temp_workspace
+            mock_settings_obj.EMAIL_BASE_DIR = temp_workspace
             mock_settings_obj.max_attachment_size_bytes = 50 * 1024 * 1024  # 50MB per file limit
             mock_settings_obj.MAX_ATTACHMENT_SIZE_MB = 50
 
@@ -388,7 +388,7 @@ async def test_send_email_with_attachments_mime_type_detection(mock_settings):
         unknown_file.write_bytes(b"Unknown content")
 
         with patch('smtp.attachments.settings') as mock_settings_obj:
-            mock_settings_obj.SAM_WORKSPACE_DIR = temp_workspace
+            mock_settings_obj.EMAIL_BASE_DIR = temp_workspace
             mock_settings_obj.SMTP_USER = "test@test.com"
             mock_settings_obj.DEFAULT_FROM_NAME = "Test User"
             mock_settings_obj.max_attachment_size_bytes = 100 * 1024 * 1024
@@ -425,7 +425,7 @@ async def test_send_email_with_attachments_saves_to_sent(mock_settings):
         test_file.write_text("Content")
 
         with patch('smtp.attachments.settings') as mock_settings_obj:
-            mock_settings_obj.SAM_WORKSPACE_DIR = temp_workspace
+            mock_settings_obj.EMAIL_BASE_DIR = temp_workspace
             mock_settings_obj.SMTP_USER = "test@test.com"
             mock_settings_obj.DEFAULT_FROM_NAME = "Test User"
             mock_settings_obj.max_attachment_size_bytes = 100 * 1024 * 1024
@@ -455,7 +455,7 @@ async def test_send_email_with_attachments_save_to_sent_failure_nonfatal(mock_se
         test_file.write_text("Content")
 
         with patch('smtp.attachments.settings') as mock_settings_obj:
-            mock_settings_obj.SAM_WORKSPACE_DIR = temp_workspace
+            mock_settings_obj.EMAIL_BASE_DIR = temp_workspace
             mock_settings_obj.SMTP_USER = "test@test.com"
             mock_settings_obj.DEFAULT_FROM_NAME = "Test User"
             mock_settings_obj.max_attachment_size_bytes = 100 * 1024 * 1024
@@ -487,7 +487,7 @@ async def test_send_email_with_attachments_sets_headers(mock_settings):
         test_file.write_text("Content")
 
         with patch('smtp.attachments.settings') as mock_settings_obj:
-            mock_settings_obj.SAM_WORKSPACE_DIR = temp_workspace
+            mock_settings_obj.EMAIL_BASE_DIR = temp_workspace
             mock_settings_obj.SMTP_USER = "test@test.com"
             mock_settings_obj.DEFAULT_FROM_NAME = "Test User"
             mock_settings_obj.max_attachment_size_bytes = 100 * 1024 * 1024
@@ -521,7 +521,7 @@ async def test_send_email_with_attachments_path_traversal_security(mock_settings
     """Test security against path traversal attacks."""
     with tempfile.TemporaryDirectory() as temp_workspace:
         with patch('smtp.attachments.settings') as mock_settings_obj:
-            mock_settings_obj.SAM_WORKSPACE_DIR = temp_workspace
+            mock_settings_obj.EMAIL_BASE_DIR = temp_workspace
             mock_settings_obj.max_attachment_size_bytes = 100 * 1024 * 1024
 
             # Test various path traversal attempts

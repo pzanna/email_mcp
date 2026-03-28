@@ -51,13 +51,13 @@ class Settings(BaseSettings):
     )
 
     # Attachment handling
-    SAM_WORKSPACE_DIR: str = Field(default=".", description="Sam workspace directory for attachment storage")
+    EMAIL_BASE_DIR: str = Field(default=".", description="Base directory for email attachment storage")
     MAX_ATTACHMENT_SIZE_MB: int = Field(default=50, description="Maximum attachment size in MB")
 
     @property
     def attachment_base_dir(self) -> Path:
-        """Base directory for email attachments within workspace."""
-        return Path(self.SAM_WORKSPACE_DIR) / "attachments" / "email"
+        """Base directory for email attachments."""
+        return Path(self.EMAIL_BASE_DIR) / "attachments" / "email"
 
     @property
     def download_dir(self) -> Path:
